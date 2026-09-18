@@ -448,6 +448,16 @@ src/app/data/**
 src/app/services/**/output/**
 !src/app/services/**/output/.gitkeep
 
+# Local ML environments, model weights, and generated outputs.
+# Rebuild these from the tracked training code; do not commit them.
+.venv-yolov8s/
+.ultralytics/
+!artifacts/
+artifacts/*
+!artifacts/.gitkeep
+models/*
+!models/README.md
+
 spikes/graph-construction/src/output/**
 !spikes/graph-construction/src/output/.gitkeep
 
