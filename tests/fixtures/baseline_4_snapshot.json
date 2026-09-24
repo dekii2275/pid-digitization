@@ -1,0 +1,47 @@
+{
+  "source_image": "data/sherifahmed-digitize-pid-yolo/DigitizePID_Dataset/images/train/4.jpg",
+  "image_size": {
+    "width": 7168,
+    "height": 4561
+  },
+  "stage_artifacts_dir": "artifacts/pid-pipeline/4",
+  "baseline_metrics": {
+    "symbols": {
+      "detection_count": 1208,
+      "min_confidence": 0.10,
+      "classes_count": 15,
+      "sample_classes": [
+        "Instrument/Valve/Globe valve NO",
+        "Instrument/Valve/Butterfly valve",
+        "Instrument/Valve/Control valve"
+      ]
+    },
+    "ocr": {
+      "text_count": 785,
+      "min_confidence": 0.0,
+      "engine": "PP-OCRv5"
+    },
+    "lines": {
+      "line_count": 217,
+      "thinning_method": "opencv_zhang_suen",
+      "binary_threshold_used": 112
+    },
+    "topology": {
+      "connected_assets": 271,
+      "symbols_with_associated_text": 572,
+      "arrow_nodes": 197
+    },
+    "editor": {
+      "scene_objects_count": 2210
+    }
+  },
+  "invariants": {
+    "symbols_gt_zero": true,
+    "ocr_gt_zero": true,
+    "lines_gt_zero": true,
+    "relationships_gt_zero": true,
+    "bboxes_within_image_bounds": true,
+    "lines_within_image_bounds": true,
+    "connected_symbols_have_valid_bboxes": true
+  }
+}

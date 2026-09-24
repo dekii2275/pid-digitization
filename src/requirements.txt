@@ -8,6 +8,7 @@ uvicorn[standard]==0.22.0
 gunicorn==20.1.0
 pytest-cov==4.1.0
 pytest-dotenv==0.5.2
+python-dotenv>=1.0,<2.0
 python-multipart==0.0.6
 prometheus-fastapi-instrumentator==6.0.0
 prometheus_client==0.17.0
@@ -25,3 +26,10 @@ matplotlib==3.7.2
 pyodbc==4.0.39
 pdf2image
 pypdfium2
+SQLAlchemy==2.0.36
+alembic==1.14.0
+psycopg2-binary==2.9.10
+redis==5.2.0
+Pillow==10.4.0
+numpy==1.26.4
+ultralytics==8.3.0

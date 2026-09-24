@@ -1,7 +1,7 @@
-# Training-only environment for YOLOv8s on an NVIDIA GPU.
+# Unified local environment for YOLOv8s and PaddleOCR on an NVIDIA GPU.
 # The machine currently has an RTX 3050 and an NVIDIA driver reporting CUDA 12.8.
-# PyTorch supplies the CUDA runtime through these wheels; a separate CUDA Toolkit
-# installation is not required for ordinary training.
+# PyTorch supplies most of the CUDA runtime through these wheels; the unified
+# bootstrap aligns the shared cuDNN package for PaddleOCR on Windows.
 --extra-index-url https://download.pytorch.org/whl/cu128
 
 torch==2.10.0+cu128

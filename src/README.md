@@ -255,35 +255,30 @@ See [this document on local development setup](../docs/local_development_setup.m
 
 ### Steps to run the project
 
-If running outside of the `dev-container` create your virtual environment.
+For the full application stack, use Docker Compose from the repository root.
+It starts the API, worker, frontend, PostgreSQL, and Redis with one command:
 
-```bash
-python -m venv venv
-source ./venv/Scripts/activate # or ./venv/bin/activate
+```powershell
+Copy-Item .env.docker.example .env
+docker compose up --build
 ```
 
-To copy .env.sample to .env:
+The API documentation is then available at `http://localhost:18732/docs`.
 
-```bash
-cp .env.sample .env
+For API-only development outside Docker, create a virtual environment at the
+repository root, install the backend requirements, and run Uvicorn with
+`src/` as the import root:
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r .\src\requirements.txt
+uvicorn app.main:app --app-dir .\src --reload
 ```
 
-Install the dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run the API.
-This can be done via command line:
-
-```bash
-python -m init_app
-# or
-gunicorn init_app:app -k uvicorn.workers.UvicornWorker -b 0.0.0.0
-```
-
-or via the VSCode debugger using the provided launch task "Python: FastAPI".
+Copy `.env.docker.example` to `.env` when local database credentials or port
+overrides are needed. The application loads that file if it exists and does
+not overwrite values already set in the process environment.
 
 ![Screenshot of VSCode FastAPI launch task](../docs/assets/vscode-fastapi.png)
 

@@ -29,8 +29,8 @@ Outside the repository root, keep non-source material in the workspace:
 
 1. Build the API environment from `src/requirements.txt`, or use the existing
    dev container workflow in `docs/local_development_setup.md`.
-2. Build the independent YOLO environment with
-   `./scripts/bootstrap-yolov8.ps1`.
+2. Build the unified local OCR/YOLO environment with
+   `./scripts/bootstrap-ocr.ps1`.
 3. Supply a dataset at the layout documented in `training/yolov8s/README.md`.
 4. Train or download weights into `models/`.
 5. Run preview or connect the local detector to the API through a dedicated

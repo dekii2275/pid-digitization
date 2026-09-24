@@ -1,0 +1,12 @@
+# Optional OCR environment additions. The PaddlePaddle Windows wheels currently
+# support Python 3.9-3.13; use scripts/bootstrap-ocr.ps1 for the image branch.
+# PyMuPDF is used for vector PDF text-layer extraction; PaddleOCR is used for
+# raster/image OCR.
+numpy>=1.26,<3.0
+opencv-python>=4.8,<5.0
+PyMuPDF>=1.24.0,<2.0.0
+# Install paddlepaddle or paddlepaddle-gpu separately via bootstrap-ocr.ps1.
+paddleocr>=3.0.0,<4.0.0
+# Required by the legacy topology adapter's Pydantic settings loader when it
+# reads the local .env file.
+python-dotenv>=1.0,<2.0

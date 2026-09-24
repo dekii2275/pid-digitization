@@ -7,6 +7,7 @@ import cv2
 import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
+from typing import Optional
 from app.models.image_details import ImageDetails
 from app.models.graph_construction.connected_symbols_item import ConnectedSymbolsItem
 from app.services.graph_construction.config.symbol_node_keys_config import SymbolNodeKeysConfig
@@ -97,16 +98,33 @@ def draw_persistent_graph_annotated(
         assets: list[ConnectedSymbolsItem],
         pid_image: bytes,
         image_details: ImageDetails,
-        output_file_path: str):
+        output_file_path: str,
+        detected_lines: Optional[list[LineSegment]] = None):
     '''
         Draws the computed graph connected on top of the input PID image.
         :param assets: List of assets (result of graph construction step)
         :param pid_image: PID image in bytes
         :param image_details: Image details
         :param output_file_path: Output file path
+        :param detected_lines: All input line segments. These are rendered as a
+            muted background layer so a reviewer can distinguish lines found by
+            the detector from the smaller set of lines used by topology paths.
   '''
 
     img = cv2.imdecode(np.frombuffer(pid_image, np.uint8), cv2.IMREAD_COLOR)
+
+    # First render every detected line as a semi-transparent light-blue layer.
+    # A topology path only contains segments for connections that could be
+    # traced successfully; without this layer the overlay hides the majority
+    # of line-detector output and makes review unnecessarily difficult.
+    if detected_lines:
+        line_layer = img.copy()
+        for line_segment in detected_lines:
+            draw_line(line_layer,
+                      image_details,
+                      line_segment,
+                      (255, 200, 100))  # BGR: muted light blue
+        img = cv2.addWeighted(line_layer, 0.45, img, 0.55, 0)
 
     # All assets are included in this debug view - this can be tuned in the future
     for asset in assets:

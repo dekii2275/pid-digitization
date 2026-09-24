@@ -3,18 +3,9 @@ param(
     [string]$Python = "python"
 )
 
-$ErrorActionPreference = "Stop"
-$repositoryRoot = Split-Path -Parent $PSScriptRoot
-$environmentPath = Join-Path $repositoryRoot ".venv-yolov8s"
-$requirementsPath = Join-Path $repositoryRoot "training\yolov8s\requirements.txt"
-
-if (-not (Test-Path -LiteralPath $requirementsPath)) {
-    throw "Training requirements were not found at $requirementsPath"
-}
-
-& $Python -m venv $environmentPath
-$venvPython = Join-Path $environmentPath "Scripts\python.exe"
-& $venvPython -m pip install --upgrade pip
-& $venvPython -m pip install -r $requirementsPath
-
-Write-Host "YOLOv8 environment is ready: $environmentPath"
+# Backward-compatible entry point. The repository now uses one environment
+# for PaddleOCR and YOLO: .venv-ocr. `$Python` is retained for callers of the
+# old script, but the unified bootstrap should be preferred.
+$bootstrapScript = Join-Path $PSScriptRoot "bootstrap-ocr.ps1"
+& $bootstrapScript -PythonLauncher "py" -PythonVersion "3.13" -PaddleMode "gpu" -CudaWheel "cu126"
+exit $LASTEXITCODE

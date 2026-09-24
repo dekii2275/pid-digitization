@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>P&ID editable reconstruction</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #101820;
+      --panel: #17232d;
+      --panel-2: #1d2d38;
+      --border: #304552;
+      --text: #e8f0f4;
+      --muted: #91a6b1;
+      --accent: #58c8b4;
+      --accent-2: #ffbd69;
+      --danger: #f27d7d;
+      --line: #5fc2af;
+      --topology: #d6a25a;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 14px/1.35 system-ui, sans-serif; }
+    body { overflow: hidden; }
+    button, input { font: inherit; }
+    button { border: 1px solid var(--border); border-radius: 5px; background: var(--panel-2); color: var(--text); padding: 7px 10px; cursor: pointer; }
+    button:hover { border-color: var(--accent); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .app { height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--border); background: var(--panel); }
+    .title { margin-right: 10px; font-weight: 600; letter-spacing: .02em; }
+    .toolbar .spacer { flex: 1; }
+    .toolbar label { color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+    .toolbar input[type="checkbox"] { accent-color: var(--accent); }
+    .status { color: var(--muted); white-space: nowrap; }
+    .workspace { min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 270px; }
+    .canvas-wrap { min-width: 0; min-height: 0; position: relative; overflow: hidden; background: #26353c; }
+    svg { display: block; width: 100%; height: 100%; touch-action: none; user-select: none; }
+    .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; text-align: center; padding: 30px; }
+    .inspector { overflow: auto; padding: 15px; border-left: 1px solid var(--border); background: var(--panel); }
+    .inspector h2 { font-size: 15px; margin: 0 0 12px; }
+    .inspector p { color: var(--muted); margin: 7px 0; }
+    .field { display: grid; gap: 5px; margin: 11px 0; }
+    .field label { color: var(--muted); font-size: 12px; }
+    .field input { width: 100%; border: 1px solid var(--border); border-radius: 4px; padding: 7px; background: #0e171e; color: var(--text); }
+    .selected-meta { color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+    .danger { color: var(--danger); }
+    .symbol-mark { fill: rgba(88, 200, 180, .08); stroke: #58c8b4; stroke-width: 5; vector-effect: non-scaling-stroke; cursor: move; }
+    .symbol-mark.instrument { stroke: #ffbd69; }
+    .symbol-mark.piping { stroke: #9fbbff; }
+    .symbol-mark.indicator { stroke: #e493ff; }
+    .symbol-mark.selected { stroke: #ffffff; stroke-width: 9; fill: rgba(255,255,255,.12); }
+    .symbol-shape { fill: none; stroke: currentColor; stroke-width: 5; vector-effect: non-scaling-stroke; pointer-events: none; }
+    .symbol-shape.fill { fill: currentColor; }
+    .ocr-mark { fill: #e8f0f4; font-size: 28px; pointer-events: all; cursor: move; paint-order: stroke; stroke: #101820; stroke-width: 5; stroke-linejoin: round; }
+    .ocr-mark.selected { fill: var(--accent-2); }
+    .detected-line { stroke: var(--line); stroke-width: 8; opacity: .62; vector-effect: non-scaling-stroke; cursor: move; }
+    .detected-line.selected { stroke: #ffffff; stroke-width: 13; opacity: 1; }
+    .topology-line { stroke: var(--topology); stroke-width: 3; stroke-dasharray: 16 12; opacity: .52; vector-effect: non-scaling-stroke; pointer-events: none; }
+    .handle { fill: #ffffff; stroke: #101820; stroke-width: 4; vector-effect: non-scaling-stroke; cursor: pointer; }
+    .legend { position: absolute; left: 12px; bottom: 12px; padding: 7px 9px; border: 1px solid var(--border); border-radius: 5px; background: rgba(16,24,32,.9); color: var(--muted); font-size: 12px; pointer-events: none; }
+    .legend span { margin-right: 10px; }
+    .swatch { display: inline-block; width: 12px; height: 3px; vertical-align: middle; margin-right: 4px; background: var(--line); }
+    .swatch.topology { background: var(--topology); }
+    @media (max-width: 760px) {
+      body { overflow: auto; }
+      .app { height: auto; min-height: 100vh; }
+      .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(55vh, 1fr) auto; }
+      .inspector { border-left: 0; border-top: 1px solid var(--border); }
+      .status { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="pid-editor">
+    <header class="toolbar">
+      <div class="title">P&ID editable reconstruction</div>
+      <button type="button" id="add-symbol">Add symbol</button>
+      <button type="button" id="add-line">Add line</button>
+      <button type="button" id="delete-selected">Delete selected</button>
+      <button type="button" id="save-scene">Save scene JSON</button>
+      <button type="button" id="export-svg">Export SVG</button>
+      <label><input type="file" id="load-scene" accept=".json,application/json"> Load JSON</label>
+      <span class="spacer"></span>
+      <label><input type="checkbox" id="show-background" checked> background</label>
+      <label><input type="checkbox" id="show-symbols" checked> symbols</label>
+      <label><input type="checkbox" id="show-lines" checked> lines</label>
+      <label><input type="checkbox" id="show-text"> OCR text</label>
+      <label><input type="checkbox" id="show-topology"> topology</label>
+      <button type="button" id="zoom-out" aria-label="Zoom out">−</button>
+      <button type="button" id="zoom-reset">100%</button>
+      <button type="button" id="zoom-in" aria-label="Zoom in">+</button>
+      <span class="status" id="status">Loading scene…</span>
+    </header>
+    <main class="workspace">
+      <section class="canvas-wrap" aria-label="Editable P and ID drawing">
+        <svg id="drawing" role="img" aria-label="Editable reconstructed P and ID drawing" viewBox="0 0 100 100" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="empty" id="empty-state">Loading scene.json…<br>Use “Load JSON” if this page was opened directly from the file system.</div>
+        <div class="legend"><span><i class="swatch"></i>detected line</span><span><i class="swatch topology"></i>legacy connection</span></div>
+      </section>
+      <aside class="inspector" aria-label="Selection inspector">
+        <h2>Selection</h2>
+        <div id="inspector-content"><p>Select a symbol, OCR text, or line.</p></div>
+      </aside>
+    </main>
+  </div>
+  <script>
+    const SVG_NS = 'http://www.w3.org/2000/svg';
+    const state = {
+      scene: null,
+      initialScene: null,
+      selected: null,
+      drag: null,
+      zoom: 1,
+      show: { background: true, symbols: true, lines: true, text: false, topology: false }
+    };
+    const svg = document.getElementById('drawing');
+    const status = document.getElementById('status');
+    const emptyState = document.getElementById('empty-state');
+    const inspector = document.getElementById('inspector-content');
+
+    function deepCopy(value) { return JSON.parse(JSON.stringify(value)); }
+    function make(tag, attrs = {}) {
+      const node = document.createElementNS(SVG_NS, tag);
+      for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, String(value));
+      return node;
+    }
+    function download(name, content, mime) {
+      const blob = new Blob([content], { type: mime });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = name;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 500);
+    }
+    function classNameFor(type) {
+      const lower = String(type || '').toLowerCase();
+      if (lower.includes('indicator') || lower.includes('instrument')) return 'instrument';
+      if (lower.includes('piping') || lower.includes('valve') || lower.includes('reducer') || lower.includes('flange')) return 'piping';
+      return 'indicator';
+    }
+    function symbolById(id) { return state.scene.symbols.find(item => item.id === id); }
+    function appendSymbolShape(group, symbol) {
+      const w = symbol.width;
+      const h = symbol.height;
+      const lower = String(symbol.type || '').toLowerCase();
+      const shape = (tag, attrs) => group.appendChild(make(tag, { ...attrs, class: 'symbol-shape' }));
+      if (lower.includes('valve')) {
+        shape('path', { d: `M ${w * .10} ${h * .50} L ${w * .42} ${h * .12} L ${w * .42} ${h * .88} Z M ${w * .90} ${h * .50} L ${w * .58} ${h * .12} L ${w * .58} ${h * .88} Z` });
+        shape('line', { x1: w * .50, y1: h * .12, x2: w * .50, y2: h * .88 });
+      } else if (lower.includes('instrument') || lower.includes('indicator') || lower.includes('recorder')) {
+        shape('ellipse', { cx: w * .50, cy: h * .50, rx: Math.max(5, w * .30), ry: Math.max(5, h * .35) });
+        shape('line', { x1: w * .50, y1: 0, x2: w * .50, y2: h * .18 });
+      } else if (lower.includes('reducer')) {
+        shape('polygon', { points: `${w * .08},${h * .28} ${w * .92},${h * .10} ${w * .92},${h * .90} ${w * .08},${h * .72}` });
+      } else if (lower.includes('arrow')) {
+        shape('line', { x1: w * .12, y1: h * .50, x2: w * .82, y2: h * .50 });
+        shape('polygon', { points: `${w * .82},${h * .50} ${w * .58},${h * .18} ${w * .58},${h * .82}` });
+      } else if (lower.includes('flange') || lower.includes('connection')) {
+        shape('line', { x1: w * .38, y1: h * .12, x2: w * .38, y2: h * .88 });
+        shape('line', { x1: w * .62, y1: h * .12, x2: w * .62, y2: h * .88 });
+      } else {
+        shape('ellipse', { cx: w * .50, cy: h * .50, rx: Math.max(4, w * .25), ry: Math.max(4, h * .28) });
+      }
+    }
+    function pointFromEvent(event) {
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(svg.getScreenCTM().inverse());
+    }
+    function updateViewBox() {
+      if (!state.scene) return;
+      const width = state.scene.source.width / state.zoom;
+      const height = state.scene.source.height / state.zoom;
+      const x = (state.scene.source.width - width) / 2;
+      const y = (state.scene.source.height - height) / 2;
+      svg.setAttribute('viewBox', `${x} ${y} ${width} ${height}`);
+      document.getElementById('zoom-reset').textContent = `${Math.round(state.zoom * 100)}%`;
+    }
+    function render() {
+      if (!state.scene) return;
+      updateViewBox();
+      svg.replaceChildren();
+      const root = make('g');
+      if (state.show.background) {
+        root.appendChild(make('image', { href: state.scene.source.background, x: 0, y: 0, width: state.scene.source.width, height: state.scene.source.height, preserveAspectRatio: 'none' }));
+      }
+      if (state.show.lines) {
+        const group = make('g', { 'aria-label': 'Detected lines' });
+        state.scene.lines.forEach((line, index) => {
+          const selected = state.selected && state.selected.kind === 'line' && state.selected.index === index;
+          const node = make('line', { x1: line.x1, y1: line.y1, x2: line.x2, y2: line.y2, class: `detected-line${selected ? ' selected' : ''}` });
+          node.dataset.index = index;
+          node.addEventListener('pointerdown', event => beginDrag(event, 'line', index, 'body'));
+          group.appendChild(node);
+        });
+        root.appendChild(group);
+      }
+      if (state.show.topology) {
+        const group = make('g', { 'aria-label': 'Legacy topology connections' });
+        state.scene.topology_edges.forEach(edge => {
+          const source = symbolById(edge.source);
+          const target = symbolById(edge.target);
+          if (!source || !target) return;
+          group.appendChild(make('line', {
+            x1: source.x + source.width / 2, y1: source.y + source.height / 2,
+            x2: target.x + target.width / 2, y2: target.y + target.height / 2,
+            class: 'topology-line'
+          }));
+        });
+        root.appendChild(group);
+      }
+      if (state.show.symbols) {
+        const group = make('g', { 'aria-label': 'Detected symbols' });
+        state.scene.symbols.forEach((symbol, index) => {
+          const selected = state.selected && state.selected.kind === 'symbol' && state.selected.index === index;
+          const node = make('g', { transform: `translate(${symbol.x} ${symbol.y})` });
+          const boundary = make('rect', { x: 0, y: 0, width: symbol.width, height: symbol.height, rx: Math.min(symbol.width, symbol.height) * .12, class: `symbol-mark ${classNameFor(symbol.type)}${selected ? ' selected' : ''}` });
+          node.appendChild(boundary);
+          appendSymbolShape(node, symbol);
+          node.dataset.index = index;
+          node.addEventListener('pointerdown', event => beginDrag(event, 'symbol', index));
+          node.appendChild(make('title')).textContent = `${symbol.id}: ${symbol.type} (${Number(symbol.confidence || 0).toFixed(2)})`;
+          group.appendChild(node);
+          if (selected) {
+            group.appendChild(make('text', { x: symbol.x + symbol.width + 10, y: symbol.y + symbol.height / 2, class: 'ocr-mark' })).textContent = symbol.type;
+          }
+        });
+        root.appendChild(group);
+      }
+      if (state.show.text) {
+        const group = make('g', { 'aria-label': 'OCR text' });
+        state.scene.texts.forEach((item, index) => {
+          const selected = state.selected && state.selected.kind === 'text' && state.selected.index === index;
+          const node = make('text', { x: item.x, y: item.y + Math.max(item.height, 18), class: `ocr-mark${selected ? ' selected' : ''}` });
+          node.textContent = item.text;
+          node.addEventListener('pointerdown', event => beginDrag(event, 'text', index));
+          group.appendChild(node);
+        });
+        root.appendChild(group);
+      }
+      if (state.selected && state.selected.kind === 'line') {
+        const line = state.scene.lines[state.selected.index];
+        if (line) {
+          root.appendChild(make('circle', { cx: line.x1, cy: line.y1, r: 18, class: 'handle', 'data-handle': 'start' }));
+          root.appendChild(make('circle', { cx: line.x2, cy: line.y2, r: 18, class: 'handle', 'data-handle': 'end' }));
+          root.lastChild.addEventListener('pointerdown', event => beginDrag(event, 'line', state.selected.index, 'end'));
+          root.childNodes[root.childNodes.length - 2].addEventListener('pointerdown', event => beginDrag(event, 'line', state.selected.index, 'start'));
+        }
+      }
+      svg.appendChild(root);
+      emptyState.hidden = true;
+      updateInspector();
+      updateStatus();
+    }
+    function beginDrag(event, kind, index, part = 'body') {
+      event.stopPropagation();
+      if (!state.scene) return;
+      state.selected = { kind, index };
+      const point = pointFromEvent(event);
+      const item = state.scene[`${kind}s`][index];
+      state.drag = { kind, index, part, point, original: deepCopy(item) };
+      svg.setPointerCapture(event.pointerId);
+      render();
+    }
+    function moveDrag(event) {
+      if (!state.drag || !state.scene) return;
+      const point = pointFromEvent(event);
+      const dx = point.x - state.drag.point.x;
+      const dy = point.y - state.drag.point.y;
+      const item = state.scene[`${state.drag.kind}s`][state.drag.index];
+      const original = state.drag.original;
+      if (state.drag.kind === 'symbol' || state.drag.kind === 'text') {
+        item.x = original.x + dx;
+        item.y = original.y + dy;
+      } else if (state.drag.kind === 'line') {
+        if (state.drag.part === 'start') { item.x1 = original.x1 + dx; item.y1 = original.y1 + dy; }
+        else if (state.drag.part === 'end') { item.x2 = original.x2 + dx; item.y2 = original.y2 + dy; }
+        else { item.x1 = original.x1 + dx; item.y1 = original.y1 + dy; item.x2 = original.x2 + dx; item.y2 = original.y2 + dy; }
+      }
+      render();
+    }
+    function endDrag(event) {
+      if (state.drag) {
+        try { svg.releasePointerCapture(event.pointerId); } catch (_) { /* capture may already be released */ }
+      }
+      state.drag = null;
+    }
+    function updateStatus() {
+      if (!state.scene) return;
+      const selected = state.selected ? `${state.selected.kind} #${state.selected.index}` : 'nothing selected';
+      status.textContent = `${state.scene.symbols.length} symbols · ${state.scene.lines.length} lines · ${state.scene.texts.length} texts · ${selected}`;
+    }
+    function updateInspector() {
+      if (!state.scene || !state.selected) { inspector.innerHTML = '<p>Select a symbol, OCR text, or line.</p>'; return; }
+      const { kind, index } = state.selected;
+      const item = state.scene[`${kind}s`][index];
+      if (!item) { inspector.innerHTML = '<p>Selection no longer exists.</p>'; return; }
+      const heading = kind === 'symbol' ? item.type : kind === 'text' ? 'OCR text' : 'Detected line';
+      inspector.innerHTML = `<h2>${heading}</h2><div class="selected-meta">${item.id || `${kind}-${index}`} · drag directly on the drawing</div>`;
+      if (kind === 'symbol') addField('Type', item.type, value => { item.type = value; render(); });
+      if (kind === 'text') addField('Text', item.text, value => { item.text = value; render(); });
+      if (kind === 'symbol' || kind === 'text') {
+        addField('X', item.x.toFixed(1), value => { item.x = Number(value) || 0; render(); });
+        addField('Y', item.y.toFixed(1), value => { item.y = Number(value) || 0; render(); });
+      }
+      if (kind === 'line') {
+        ['x1', 'y1', 'x2', 'y2'].forEach(key => addField(key.toUpperCase(), Number(item[key]).toFixed(1), value => { item[key] = Number(value) || 0; render(); }));
+      }
+      const hint = document.createElement('p');
+      hint.textContent = kind === 'line' ? 'Drag the line or its endpoint handles.' : 'Drag the item to reposition it.';
+      inspector.appendChild(hint);
+    }
+    function addField(label, value, onChange) {
+      const wrap = document.createElement('div'); wrap.className = 'field';
+      const labelNode = document.createElement('label'); labelNode.textContent = label;
+      const input = document.createElement('input'); input.value = value;
+      input.addEventListener('change', () => onChange(input.value));
+      wrap.append(labelNode, input); inspector.appendChild(wrap);
+    }
+    function setScene(scene) {
+      if (!scene || !scene.source || !Array.isArray(scene.symbols)) throw new Error('Invalid scene JSON');
+      state.scene = scene;
+      state.initialScene = deepCopy(scene);
+      state.selected = null;
+      state.zoom = 1;
+      svg.setAttribute('viewBox', `0 0 ${scene.source.width} ${scene.source.height}`);
+      render();
+    }
+    async function loadDefault() {
+      try {
+        const response = await fetch('scene.json');
+        if (!response.ok) throw new Error('scene.json not found');
+        setScene(await response.json());
+      } catch (error) {
+        emptyState.hidden = false;
+        emptyState.innerHTML = 'Scene not loaded.<br>Run this folder with a local HTTP server or use “Load JSON”.';
+        status.textContent = 'Choose scene.json';
+      }
+    }
+    document.getElementById('load-scene').addEventListener('change', event => {
+      const file = event.target.files[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => { try { setScene(JSON.parse(reader.result)); } catch (error) { status.textContent = error.message; } };
+      reader.readAsText(file);
+    });
+    document.getElementById('drawing').addEventListener('pointermove', moveDrag);
+    document.getElementById('drawing').addEventListener('pointerup', endDrag);
+    document.getElementById('drawing').addEventListener('pointercancel', endDrag);
+    document.getElementById('drawing').addEventListener('pointerdown', () => { state.selected = null; render(); });
+    [['show-background', 'background'], ['show-symbols', 'symbols'], ['show-lines', 'lines'], ['show-text', 'text'], ['show-topology', 'topology']].forEach(([id, key]) => {
+      document.getElementById(id).addEventListener('change', event => { state.show[key] = event.target.checked; render(); });
+    });
+    document.getElementById('zoom-in').addEventListener('click', () => { state.zoom = Math.min(8, state.zoom * 1.25); render(); });
+    document.getElementById('zoom-out').addEventListener('click', () => { state.zoom = Math.max(1, state.zoom / 1.25); render(); });
+    document.getElementById('zoom-reset').addEventListener('click', () => { state.zoom = 1; render(); });
+    document.getElementById('add-symbol').addEventListener('click', () => {
+      if (!state.scene) return;
+      const id = `manual-symbol-${state.scene.symbols.length + 1}`;
+      state.scene.symbols.push({ id, index: state.scene.symbols.length, type: 'New symbol', class_id: null, confidence: 1, x: state.scene.source.width / 2 - 60, y: state.scene.source.height / 2 - 35, width: 120, height: 70, rotation: 0 });
+      state.selected = { kind: 'symbol', index: state.scene.symbols.length - 1 }; render();
+    });
+    document.getElementById('add-line').addEventListener('click', () => {
+      if (!state.scene) return;
+      const id = `manual-line-${state.scene.lines.length + 1}`;
+      const x = state.scene.source.width / 2, y = state.scene.source.height / 2;
+      state.scene.lines.push({ id, x1: x - 180, y1: y, x2: x + 180, y2: y, orientation: 'horizontal' });
+      state.selected = { kind: 'line', index: state.scene.lines.length - 1 }; render();
+    });
+    document.getElementById('delete-selected').addEventListener('click', () => {
+      if (!state.scene || !state.selected) return;
+      const collection = state.scene[`${state.selected.kind}s`]; collection.splice(state.selected.index, 1); state.selected = null; render();
+    });
+    document.getElementById('save-scene').addEventListener('click', () => { if (state.scene) download('scene-edited.json', JSON.stringify(state.scene, null, 2), 'application/json'); });
+    document.getElementById('export-svg').addEventListener('click', () => { if (state.scene) download('pid-reconstruction.svg', new XMLSerializer().serializeToString(svg), 'image/svg+xml'); });
+    loadDefault();
+  </script>
+</body>
+</html>

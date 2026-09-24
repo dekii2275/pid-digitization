@@ -1,0 +1,102 @@
+name: vpi-pid
+
+services:
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    ports:
+      - "${FRONTEND_HOST_PORT:-18731}:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-pid_app}:${POSTGRES_PASSWORD:-change-this-password}@db:5432/${POSTGRES_DB:-pid_db}
+      REDIS_URL: redis://redis:6379/0
+      UPLOADS_DIR: /app/uploads
+      ARTIFACTS_DIR: /app/artifacts
+      MODELS_DIR: /app/models
+      PORT: 8000
+    command: >
+      sh -c "alembic upgrade head && gunicorn app.main:app
+      --worker-class uvicorn.workers.UvicornWorker --workers 2
+      --bind 0.0.0.0:8000 --timeout 180"
+    ports:
+      - "${BACKEND_HOST_PORT:-18732}:8000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./artifacts:/app/artifacts
+      - ./models:/app/models
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    environment:
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-pid_app}:${POSTGRES_PASSWORD:-change-this-password}@db:5432/${POSTGRES_DB:-pid_db}
+      REDIS_URL: redis://redis:6379/0
+      UPLOADS_DIR: /app/uploads
+      ARTIFACTS_DIR: /app/artifacts
+      MODELS_DIR: /app/models
+    command: python -m app.workers.pipeline_worker
+    volumes:
+      - ./uploads:/app/uploads
+      - ./artifacts:/app/artifacts
+      - ./models:/app/models
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pid_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+      POSTGRES_DB: ${POSTGRES_DB:-pid_db}
+    ports:
+      - "127.0.0.1:${DATABASE_HOST_PORT:-18733}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    ports:
+      - "127.0.0.1:${REDIS_HOST_PORT:-18734}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

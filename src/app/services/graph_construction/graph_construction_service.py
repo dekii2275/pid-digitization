@@ -161,7 +161,8 @@ def construct_graph(
     draw_persistent_graph_annotated(asset_connectivities,
                                     pid_image,
                                     text_detection_results.image_details,
-                                    debug_image_graph_connections_path)
+                                    debug_image_graph_connections_path,
+                                    line_detection_results.line_segments)
 
     logger.info(f"Total time taken for constructing the graph: {time.time() - starting_time}")
     return (asset_connectivities, arrow_nodes)

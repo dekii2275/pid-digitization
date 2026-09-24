@@ -458,6 +458,22 @@ artifacts/*
 models/*
 !models/README.md
 
+# Repository-local runtime state. Keep generated pipeline results, model weights,
+# uploads, virtual environments, and assistant build files out of Git history.
+.venv-ocr/
+.codex-build/
+deliverables/
+uploads/*
+!uploads/.gitkeep
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.safetensors
+*.sqlite3
+*.db
+.ruff_cache/
+
 spikes/graph-construction/src/output/**
 !spikes/graph-construction/src/output/.gitkeep
 
