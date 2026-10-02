@@ -15,29 +15,25 @@ services:
   backend:
     build:
       context: .
-      dockerfile: docker/backend.Dockerfile
+      dockerfile: docker/backend.web.Dockerfile
     environment:
-      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-pid_app}:${POSTGRES_PASSWORD:-change-this-password}@db:5432/${POSTGRES_DB:-pid_db}
-      REDIS_URL: redis://redis:6379/0
-      UPLOADS_DIR: /app/uploads
-      ARTIFACTS_DIR: /app/artifacts
-      MODELS_DIR: /app/models
-      PORT: 8000
-    command: >
-      sh -c "alembic upgrade head && gunicorn app.main:app
-      --worker-class uvicorn.workers.UvicornWorker --workers 2
-      --bind 0.0.0.0:8000 --timeout 180"
+      DRAWING_STORAGE_DIR: /app/uploads
+      PREVIEW_DIR: /app/previews
+      TILE_DIR: /app/tiles
+      PIPELINE_ARTIFACTS_DIR: /app/artifacts/pipeline
+      PIPELINE_WEIGHTS: /app/models/symbol-detector/best.pt
+      PIPELINE_DEVICE: cpu
+      PIPELINE_OCR_DEVICE: cpu
+      MAX_UPLOAD_BYTES: 104857600
     ports:
       - "${BACKEND_HOST_PORT:-18732}:8000"
     volumes:
       - ./uploads:/app/uploads
+      - ./artifacts/previews:/app/previews
+      - ./artifacts/tiles:/app/tiles
       - ./artifacts:/app/artifacts
-      - ./models:/app/models
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - ./artifacts/paddlex-models:/root/.paddlex
+      - ./models:/app/models:ro
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 10s
@@ -47,6 +43,7 @@ services:
     restart: unless-stopped
 
   worker:
+    profiles: ["full-stack"]
     build:
       context: .
       dockerfile: docker/backend.Dockerfile
@@ -62,11 +59,12 @@ services:
       - ./artifacts:/app/artifacts
       - ./models:/app/models
     depends_on:
-      backend:
+      db:
         condition: service_healthy
     restart: unless-stopped
 
   db:
+    profiles: ["full-stack"]
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pid_app}
@@ -84,6 +82,7 @@ services:
     restart: unless-stopped
 
   redis:
+    profiles: ["full-stack"]
     image: redis:7-alpine
     command: redis-server --appendonly yes
     ports:

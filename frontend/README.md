@@ -1,16 +1,33 @@
-# React + Vite
+# VPI P&ID Studio frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React and Vite interface for uploading drawings, reviewing detections, and
+editing the extracted P&ID scene. The frontend calls the FastAPI service at
+`/api/v1` by default.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Use Node.js 22 and install dependencies from this directory:
 
-## React Compiler
+```powershell
+npm ci
+npm run dev
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Vite serves the UI at `http://localhost:18180` and proxies `/api` to the
+backend at `http://localhost:18732`. Start that backend with Docker Compose
+from the parent directory:
 
-## Expanding the Oxlint configuration
+```powershell
+cd ..
+docker compose up --build -d
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+The Docker UI is at `http://localhost:18731`; Nginx forwards `/api/` to the
+backend container.
+
+## Checks
+
+```powershell
+npm run lint
+npm run build
+```

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 74" role="img" aria-labelledby="title">
+  <title>Petrovietnam VPI</title>
+  <rect width="210" height="74" rx="4" fill="#ffffff"/>
+  <g fill="#df2027">
+    <path d="M25 35C11 23 17 9 26 3c-3 9 6 12 7 21-1 6-3 9-8 11Z"/>
+    <path d="M37 36C26 25 31 13 41 7c-3 10 7 14 7 24-1 5-4 8-11 10Z"/>
+    <path d="M49 37c-8-9-5-19 4-25-2 9 6 13 5 21-1 4-3 6-9 8Z"/>
+  </g>
+  <text x="68" y="30" fill="#005baa" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="700" letter-spacing=".5">PETROVIETNAM</text>
+  <text x="69" y="53" fill="#df2027" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="800" letter-spacing="1">VPI</text>
+  <text x="118" y="52" fill="#4f6578" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">VIETNAM PETROLEUM</text>
+  <text x="118" y="63" fill="#4f6578" font-family="Arial, Helvetica, sans-serif" font-size="9" font-weight="700">INSTITUTE</text>
+</svg>

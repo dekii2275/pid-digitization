@@ -9,7 +9,7 @@
 | PostgreSQL | 5432 | `127.0.0.1:18733` |
 | Redis | 6379 | `127.0.0.1:18734` |
 
-Chỉ frontend và backend được mở ra ngoài máy chủ. PostgreSQL và Redis chỉ nghe ở loopback để tránh bị truy cập từ Internet. Tất cả cổng đều đổi được trong `.env`.
+Mặc định Compose chạy frontend và backend. PostgreSQL, Redis và worker chỉ khởi động với profile `full-stack`. PostgreSQL và Redis chỉ nghe ở loopback. Tất cả cổng đều đổi được trong `.env`.
 
 ## Khởi động
 
@@ -29,7 +29,7 @@ Chỉ frontend và backend được mở ra ngoài máy chủ. PostgreSQL và Re
    docker compose up --build -d
    ```
 
-Docker sẽ khởi tạo PostgreSQL, tự chạy `alembic upgrade head`, khởi động API, frontend và worker xử lý hàng đợi Redis.
+Lệnh trên khởi động UI và API xem/xử lý bản vẽ. Để khởi động thêm worker, PostgreSQL và Redis, dùng `docker compose --profile full-stack up --build -d`. Profile này không tự chạy `alembic upgrade head`; hãy chạy migration riêng nếu dùng chức năng lưu vào database.
 
 > PostgreSQL chỉ đọc `POSTGRES_PASSWORD` khi khởi tạo volume lần đầu. Nếu bạn đã từng chạy stack với mật khẩu khác và chưa có dữ liệu cần giữ, chạy `docker compose down -v` rồi khởi động lại. Lệnh đó xoá hoàn toàn database và Redis, nên hãy sao lưu trước khi dùng trên môi trường có dữ liệu.
 

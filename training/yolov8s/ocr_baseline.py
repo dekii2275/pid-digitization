@@ -30,7 +30,10 @@ REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_ROOT = REPOSITORY_ROOT / "artifacts" / "ocr-baseline"
 
 TEXT_DETECTION_MODEL = "PP-OCRv5_mobile_det"
-TEXT_RECOGNITION_MODEL = "en_PP-OCRv5_mobile_rec"
+# PaddleX 3.0 ships the English mobile recognizer through the v4 family.
+# Keep the v5 detector, but use the latest English recognizer exposed by the
+# installed pipeline so the raster OCR step can run in the Docker runtime.
+TEXT_RECOGNITION_MODEL = "en_PP-OCRv4_mobile_rec"
 
 
 @dataclass

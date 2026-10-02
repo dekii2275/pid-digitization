@@ -17,22 +17,33 @@ service and a local YOLOv8 symbol-detector workflow.
 
 ## Quick start
 
+### Run the drawing review app
+
+The default Docker Compose profile starts the React UI and the FastAPI drawing
+service. Uploaded files and generated previews are stored in local bind mounts.
+
+```powershell
+docker compose up --build -d
+```
+
+Open `http://localhost:18731` for the UI or `http://localhost:18732/docs`
+for the API. Stop the services with `docker compose down`.
+
+The legacy worker, PostgreSQL, and Redis services are available under the
+`full-stack` profile:
+
+```powershell
+docker compose --profile full-stack up --build -d
+```
+
 The repository contains two complementary workflows:
 
 - **Application stack:** FastAPI API, worker, PostgreSQL, Redis, and React UI.
 - **Local ML pipeline:** symbol detection, OCR, line detection, and topology
   reconstruction from a P&ID/PFD image or PDF.
 
-### Run the application stack with Docker
-
-```powershell
-Copy-Item .env.docker.example .env
-docker compose up --build
-```
-
-Open the UI at `http://localhost:18731` and the API documentation at
-`http://localhost:18732/docs`. Replace the placeholder database password in
-`.env` before any non-local deployment.
+For the `full-stack` profile, copy `.env.docker.example` to `.env` and set a
+unique database password before deploying outside a local development machine.
 
 ### Run the local ML pipeline
 
@@ -60,12 +71,11 @@ git diff --cached --check
 git commit -m "Describe your change"
 ```
 
-The configured `origin` points to the upstream Azure Samples repository. Add
-your fork as a separate remote before pushing, for example:
+The configured `origin` points to the project repository, while `upstream`
+points to Azure Samples. Push your branch to `origin`:
 
 ```powershell
-git remote add personal https://github.com/<your-account>/<your-repository>.git
-git push -u personal main
+git push origin main
 ```
 
 ## Repository layout
