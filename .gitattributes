@@ -2,6 +2,17 @@
 # Set default behavior to automatically normalize line endings.
 ###############################################################################
 * text=auto
+*.py text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.ps1 text eol=lf
+*.pt binary
+*.dwg binary
 
 ###############################################################################
 # Set shell scipts to use LF

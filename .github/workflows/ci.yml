@@ -37,3 +37,35 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npm run build
+
+  web-stack:
+    name: Fresh Docker stack and real pipeline
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      COMPOSE_PROJECT_NAME: vpi-ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Start from tracked source and empty database
+        run: |
+          cp .env.docker.example .env
+          docker compose config --quiet
+          docker compose up --build -d --wait --wait-timeout 180
+      - name: Check dependencies and API regressions
+        run: |
+          docker compose exec -T backend pip check
+          docker compose exec -T backend pip install -r src/requirements.test.txt
+          docker compose exec -T backend pip check
+          docker compose exec -T backend python -m unittest discover -s tests -p 'test_web_main.py' -v
+          docker compose exec -T -e SYMBOL_TEST_DATABASE=1 backend python -m unittest discover -s tests -p 'test_symbol_library.py' -v
+      - name: Check deployed UI, uploads and real AI pipeline through Nginx
+        run: python scripts/smoke_web.py --pipeline --timeout 1200
+      - name: Service logs
+        if: always()
+        run: docker compose logs --no-color --tail 150
+      - name: Stop isolated CI stack
+        if: always()
+        run: docker compose down -v

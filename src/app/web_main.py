@@ -1,4 +1,4 @@
-"""Temporary, database-free drawing viewer API for the AI Review Workspace."""
+"""Drawing review API with a PostgreSQL symbol catalog and local AI pipeline."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ import sys
 import threading
 import uuid
 from dataclasses import dataclass, field
+from contextlib import asynccontextmanager, closing
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,12 +19,14 @@ from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
+from app.symbol_library import init_library, router as symbol_library_router
 
-APP_ROOT = Path(os.getenv("DRAWING_STORAGE_DIR", "/app/uploads"))
-PREVIEW_ROOT = Path(os.getenv("PREVIEW_DIR", "/app/previews"))
-TILE_ROOT = Path(os.getenv("TILE_DIR", "/app/tiles"))
-PIPELINE_ARTIFACTS_ROOT = Path(os.getenv("PIPELINE_ARTIFACTS_DIR", "/app/artifacts/pipeline"))
-PIPELINE_WEIGHTS = Path(os.getenv("PIPELINE_WEIGHTS", "/app/models/symbol-detector/best.pt"))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+APP_ROOT = Path(os.getenv("DRAWING_STORAGE_DIR", str(REPO_ROOT / "uploads")))
+PREVIEW_ROOT = Path(os.getenv("PREVIEW_DIR", str(REPO_ROOT / "artifacts/previews")))
+TILE_ROOT = Path(os.getenv("TILE_DIR", str(REPO_ROOT / "artifacts/tiles")))
+PIPELINE_ARTIFACTS_ROOT = Path(os.getenv("PIPELINE_ARTIFACTS_DIR", str(REPO_ROOT / "artifacts/pipeline")))
+PIPELINE_WEIGHTS = Path(os.getenv("PIPELINE_WEIGHTS", str(REPO_ROOT / "models/symbol-detector/best.pt")))
 PIPELINE_DEVICE = os.getenv("PIPELINE_DEVICE", "cpu")
 PIPELINE_OCR_DEVICE = os.getenv("PIPELINE_OCR_DEVICE", "cpu")
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
@@ -67,13 +70,20 @@ drawings: dict[str, DrawingRecord] = {}
 jobs: dict[str, PipelineJob] = {}
 jobs_lock = threading.Lock()
 
-app = FastAPI(title="VPI P&ID Drawing Viewer", version="0.1.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_library()
+    yield
+
+
+app = FastAPI(title="VPI P&ID Drawing Viewer", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:18731", "http://127.0.0.1:18731"],
+    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:18731,http://127.0.0.1:18731,http://localhost:18180,http://127.0.0.1:18180").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.include_router(symbol_library_router)
 
 
 def record_or_404(drawing_id: str) -> DrawingRecord:
@@ -95,9 +105,13 @@ def page_image(record: DrawingRecord, page_number: int) -> Path:
     output = PREVIEW_ROOT / record.drawing_id / f"page-{page_number}.png"
     output.parent.mkdir(parents=True, exist_ok=True)
     try:
-        pdf = pdfium.PdfDocument(str(record.source_path))
-        bitmap = pdf[page_number - 1].render(scale=2.0)
-        bitmap.to_pil().convert("RGB").save(output, "PNG", optimize=True)
+        with closing(pdfium.PdfDocument(str(record.source_path))) as pdf:
+            with closing(pdf[page_number - 1]) as page:
+                bitmap = page.render(scale=2.0)
+                try:
+                    bitmap.to_pil().convert("RGB").save(output, "PNG", optimize=True)
+                finally:
+                    bitmap.close()
     except Exception as error:  # pragma: no cover - defensive response for malformed PDFs
         raise HTTPException(422, f"Không thể render trang PDF: {error}") from error
     record.rendered_pages[page_number] = output
@@ -154,15 +168,20 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
                 output.write(chunk)
 
         if extension == ".pdf":
-            pdf = pdfium.PdfDocument(str(source_path))
-            page_count = len(pdf)
-            if page_count == 0:
-                raise ValueError("PDF không có trang")
             rendered = PREVIEW_ROOT / drawing_id / "page-1.png"
             rendered.parent.mkdir(parents=True, exist_ok=True)
-            bitmap = pdf[0].render(scale=2.0)
-            bitmap.to_pil().convert("RGB").save(rendered, "PNG", optimize=True)
-            width, height = Image.open(rendered).size
+            with closing(pdfium.PdfDocument(str(source_path))) as pdf:
+                page_count = len(pdf)
+                if page_count == 0:
+                    raise ValueError("PDF không có trang")
+                with closing(pdf[0]) as page:
+                    bitmap = page.render(scale=2.0)
+                    try:
+                        bitmap.to_pil().convert("RGB").save(rendered, "PNG", optimize=True)
+                    finally:
+                        bitmap.close()
+            with Image.open(rendered) as image:
+                width, height = image.size
             source_type = "pdf"
             rendered_pages = {1: rendered}
         else:
@@ -248,14 +267,14 @@ def pipeline_progress_from_line(line: str) -> tuple[str, int] | None:
 
 
 def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
-    """Run the existing local CLI pipeline in a background thread, without a database."""
+    """Run the local CLI pipeline in a background thread."""
     output_dir = PIPELINE_ARTIFACTS_ROOT / drawing.drawing_id / job.job_id
     job.output_dir = output_dir
     try:
         if not PIPELINE_WEIGHTS.is_file():
             raise FileNotFoundError(f"Không tìm thấy trọng số detector: {PIPELINE_WEIGHTS}")
         source = page_image(drawing, 1) if drawing.source_type == "pdf" else drawing.source_path
-        script = Path("/app/training/yolov8s/run_pid_pipeline.py")
+        script = REPO_ROOT / "training/yolov8s/run_pid_pipeline.py"
         if not script.is_file():
             raise FileNotFoundError("Không tìm thấy script pipeline trong container.")
         command = [
@@ -264,9 +283,9 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
             "--build-editor",
         ]
         update_job(job, status="RUNNING", stage="STARTING", progress=4)
-        environment = {**os.environ, "PYTHONPATH": "/app/src"}
+        environment = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "PYTHONUNBUFFERED": "1"}
         process = subprocess.Popen(
-            command, cwd="/app", env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            command, cwd=REPO_ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             text=True, encoding="utf-8", errors="replace",
         )
         assert process.stdout is not None
@@ -324,9 +343,9 @@ def get_final_results(job_id: str) -> dict:
     """Return the latest reviewer-approved scene for a completed pipeline job."""
     job = jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "KhÃ´ng tÃ¬m tháº¥y job.")
+        raise HTTPException(404, "Không tìm thấy job.")
     if not job.final_result_path or not job.final_result_path.is_file():
-        raise HTTPException(404, "Job nÃ y chÆ°a cÃ³ káº¿t quáº£ review Ä‘Æ°á»£c lÆ°u.")
+        raise HTTPException(404, "Job này chưa có kết quả review được lưu.")
     return json.loads(job.final_result_path.read_text(encoding="utf-8"))
 
 
@@ -335,13 +354,13 @@ def save_final_results(job_id: str, scene: dict = Body(...)) -> dict:
     """Persist a reviewer-approved copy without overwriting the raw AI scene."""
     job = jobs.get(job_id)
     if not job:
-        raise HTTPException(404, "KhÃ´ng tÃ¬m tháº¥y job.")
+        raise HTTPException(404, "Không tìm thấy job.")
     if job.status != "COMPLETED" or not job.result_path:
-        raise HTTPException(409, "Pipeline chÆ°a hoÃ n táº¥t.")
+        raise HTTPException(409, "Pipeline chưa hoàn tất.")
 
     expected_collections = ("symbols", "texts", "lines", "topology_edges")
     if not all(isinstance(scene.get(name), list) for name in expected_collections):
-        raise HTTPException(422, "Review scene pháº£i bao gá»“m symbols, texts, lines vÃ  topology_edges.")
+        raise HTTPException(422, "Review scene phải bao gồm symbols, texts, lines và topology_edges.")
 
     # A JSON round trip detaches the request object and guarantees a serializable
     # final artifact. The raw scene.json is intentionally retained for audit.
@@ -365,6 +384,8 @@ def save_final_results(job_id: str, scene: dict = Body(...)) -> dict:
 @app.get("/api/v1/documents/{drawing_id}/pages/{page_number}/preview.jpg")
 def get_preview(drawing_id: str, page_number: int) -> FileResponse:
     record = record_or_404(drawing_id)
+    if not 1 <= page_number <= record.page_count:
+        raise HTTPException(404, "Page number is outside this document.")
     preview_name = "preview.jpg" if page_number == 1 else f"preview-{page_number}.jpg"
     preview = PREVIEW_ROOT / drawing_id / preview_name
     if not preview.exists():
@@ -375,6 +396,8 @@ def get_preview(drawing_id: str, page_number: int) -> FileResponse:
 @app.get("/api/v1/documents/{drawing_id}/pages/{page_number}/tiles/{zoom}/{tile_x}/{tile_y}.png")
 def get_tile(drawing_id: str, page_number: int, zoom: int, tile_x: int, tile_y: int) -> FileResponse:
     record = record_or_404(drawing_id)
+    if not 1 <= page_number <= record.page_count:
+        raise HTTPException(404, "Page number is outside this document.")
     if zoom < 0 or zoom > record.max_zoom or tile_x < 0 or tile_y < 0:
         raise HTTPException(404, "Tile không tồn tại.")
     scale_down = 2 ** (record.max_zoom - zoom)

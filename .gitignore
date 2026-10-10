@@ -457,6 +457,9 @@ artifacts/*
 !artifacts/.gitkeep
 models/*
 !models/README.md
+!models/symbol-detector/
+models/symbol-detector/*
+!models/symbol-detector/best.pt
 
 # Repository-local runtime state. Keep generated pipeline results, model weights,
 # uploads, virtual environments, and assistant build files out of Git history.
@@ -466,6 +469,7 @@ deliverables/
 uploads/*
 !uploads/.gitkeep
 *.pt
+!models/symbol-detector/best.pt
 *.pth
 *.onnx
 *.ckpt

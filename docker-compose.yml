@@ -17,6 +17,11 @@ services:
       context: .
       dockerfile: docker/backend.web.Dockerfile
     environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER:-pid_app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-this-password}
+      POSTGRES_DB: ${POSTGRES_DB:-pid_db}
       DRAWING_STORAGE_DIR: /app/uploads
       PREVIEW_DIR: /app/previews
       TILE_DIR: /app/tiles
@@ -27,6 +32,9 @@ services:
       MAX_UPLOAD_BYTES: 104857600
     ports:
       - "${BACKEND_HOST_PORT:-18732}:8000"
+    depends_on:
+      db:
+        condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
       - ./artifacts/previews:/app/previews
@@ -64,7 +72,6 @@ services:
     restart: unless-stopped
 
   db:
-    profiles: ["full-stack"]
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-pid_app}

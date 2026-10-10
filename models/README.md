@@ -1,17 +1,17 @@
-# Local model weights
+# Detector checkpoint
 
-This directory is deliberately excluded from Git, except for this file.
+`symbol-detector/best.pt` is the existing trained YOLOv8s checkpoint distributed
+with this application (22,622,127 bytes). It is tracked so a fresh clone can run
+the detector without access to the original workstation. It is a project model,
+not the generic COCO checkpoint downloaded by Ultralytics.
 
-Put downloaded, trained, or exported weights here. The recommended locations
-are:
+SHA-256: `909a7ee65a4cd05afd18cf9b07b0a29c73c991b7bbfc18753fc2e09499cc8d08`.
 
-```text
-models/
-  pretrained/          # base checkpoints, for example yolov8s.pt
-  symbol-detector/     # trained checkpoints, for example best.pt
-```
+Other checkpoints, training runs, exported model directories and datasets remain
+local and ignored by Git. Replace this file with a retrained checkpoint only
+after validating detection and the topology label mapping. The model does not
+guarantee detection accuracy on every P&ID drawing.
 
-The current local checkpoint was moved from the former `model/` directory to
-`models/symbol-detector/best.pt`. Pass its exact path to the training or
-preview command; weights are not source code and must be obtained separately
-when rebuilding a clone.
+PaddleOCR downloads its own detection/recognition models on the first pipeline
+run. An internet connection is required then; Compose retains the downloaded
+models under `artifacts/paddlex-models/` for later runs.

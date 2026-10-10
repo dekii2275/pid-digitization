@@ -1,12 +1,12 @@
 /**
- * API service for communicating with FastAPI Backend (port 18181).
+ * API service using the same proxy as the drawing review workspace.
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:18181/api/v1';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 const configuredServerHost = import.meta.env.VITE_SERVER_HOST;
 const SERVER_HOST = configuredServerHost === '__SAME_ORIGIN__'
   ? window.location.origin
-  : configuredServerHost || 'http://localhost:18181';
+  : configuredServerHost || window.location.origin;
 
 export const api = {
   // Projects

@@ -1,20 +1,11 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, FileJson, Maximize2, Plus, Save, Search, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
-import { symbolLabels } from '../data/symbolLabels';
+import SymbolPreview from './SymbolPreview';
+import { getSymbolLibrary } from '../services/symbolLibrary';
 
-const statusStorageKey = 'vpi-symbol-label-statuses';
-const editsStorageKey = 'vpi-symbol-label-edits';
 const MIN_VIEW_SIZE = 160;
 
 const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), maximum);
-
-const readStorage = (key, fallback) => {
-  try {
-    return JSON.parse(window.localStorage.getItem(key) || JSON.stringify(fallback));
-  } catch {
-    return fallback;
-  }
-};
 
 const cloneScene = (scene, drawing) => {
   const source = scene?.source || {};
@@ -166,6 +157,8 @@ export function downloadSceneFile(scene, drawing, format) {
 }
 
 export default function EditablePidWorkspace({ drawing, results, jobId, onSave, onNotify }) {
+  const [symbolLibrary, setSymbolLibrary] = useState([]);
+  const [libraryError, setLibraryError] = useState('');
   const [scene, setScene] = useState(() => cloneScene(results, drawing));
   const [selectedId, setSelectedId] = useState(null);
   const [query, setQuery] = useState('');
@@ -181,16 +174,16 @@ export default function EditablePidWorkspace({ drawing, results, jobId, onSave, 
   const interactionRef = useRef(null);
   const idCounterRef = useRef(0);
   const source = sourceOf(scene);
-  const edits = readStorage(editsStorageKey, {});
-  const statuses = readStorage(statusStorageKey, {});
-  const library = useMemo(() => symbolLabels
-    .filter((item) => statuses[item.id] !== false)
-    .map((item) => ({ ...item, ...edits[item.id] }))
+  useEffect(() => {
+    getSymbolLibrary().then(setSymbolLibrary).catch((error) => setLibraryError(error.message));
+  }, []);
+  const library = useMemo(() => symbolLibrary
+    .filter((item) => item.enabled)
     .filter((item) => {
       const normalized = query.trim().toLowerCase();
       return (category === 'All' || item.category === category) && (!normalized || `${item.id} ${item.name}`.toLowerCase().includes(normalized));
-    }), [category, edits, query, statuses]);
-  const categories = useMemo(() => ['All', ...new Set(symbolLabels.map((item) => item.category))], []);
+    }), [category, query, symbolLibrary]);
+  const categories = useMemo(() => ['All', ...new Set(symbolLibrary.map((item) => item.category))], [symbolLibrary]);
   const selectedSymbol = scene.symbols.find((symbol) => String(symbol.id) === String(selectedId));
   const backgroundUrl = drawing?.preview_url || '';
 
@@ -313,7 +306,7 @@ export default function EditablePidWorkspace({ drawing, results, jobId, onSave, 
         <div className="pid-editor-section-title"><div><b>Thư viện symbol</b><small>Chọn symbol để thêm vào bản vẽ</small></div><span>{library.length}</span></div>
         <label className="pid-editor-search"><Search size={14} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Tìm ID hoặc tên symbol" /></label>
         <select className="pid-editor-category" value={category} onChange={(event) => setCategory(event.target.value)}>{categories.map((item) => <option key={item}>{item}</option>)}</select>
-        <div className="pid-editor-library-list">{library.map((item) => <button type="button" key={item.id} onClick={() => addSymbol(item)}><img src={item.preview} alt="" /><span><b>{item.id}</b><small>{item.name}</small></span><Plus size={14} /></button>)}</div>
+        <div className="pid-editor-library-list">{library.map((item) => <button type="button" key={item.id} onClick={() => addSymbol(item)}><SymbolPreview symbol={item} compact /><span><b>{item.id}</b><small>{item.name}</small></span><Plus size={14} /></button>)}{library.length === 0 && <small className="symbol-library-empty">{libraryError || 'Chưa có symbol phù hợp.'}</small>}</div>
       </section>
       {selectedSymbol ? <section className="pid-editor-properties">
         <div className="pid-editor-section-title"><div><b>Symbol đang chọn</b><small>{selectedSymbol.source === 'manual' ? 'Thêm thủ công' : 'AI detected'}</small></div><button type="button" className="pid-editor-delete" title="Xóa symbol" onClick={removeSelected}><Trash2 size={14} /></button></div>
