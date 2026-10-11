@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import json
 import math
 import os
-import json
+import re
 import subprocess
 import sys
 import threading
 import uuid
-from dataclasses import dataclass, field
 from contextlib import asynccontextmanager, closing
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -19,14 +20,21 @@ from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from PIL import Image, UnidentifiedImageError
-from app.symbol_library import init_library, router as symbol_library_router
+
+from app.annotations import create_router as create_annotation_router
+from app.symbol_library import init_library
+from app.symbol_library import router as symbol_library_router
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = Path(os.getenv("DRAWING_STORAGE_DIR", str(REPO_ROOT / "uploads")))
 PREVIEW_ROOT = Path(os.getenv("PREVIEW_DIR", str(REPO_ROOT / "artifacts/previews")))
 TILE_ROOT = Path(os.getenv("TILE_DIR", str(REPO_ROOT / "artifacts/tiles")))
-PIPELINE_ARTIFACTS_ROOT = Path(os.getenv("PIPELINE_ARTIFACTS_DIR", str(REPO_ROOT / "artifacts/pipeline")))
-PIPELINE_WEIGHTS = Path(os.getenv("PIPELINE_WEIGHTS", str(REPO_ROOT / "models/symbol-detector/best.pt")))
+PIPELINE_ARTIFACTS_ROOT = Path(
+    os.getenv("PIPELINE_ARTIFACTS_DIR", str(REPO_ROOT / "artifacts/pipeline"))
+)
+PIPELINE_WEIGHTS = Path(
+    os.getenv("PIPELINE_WEIGHTS", str(REPO_ROOT / "models/symbol-detector/best.pt"))
+)
 PIPELINE_DEVICE = os.getenv("PIPELINE_DEVICE", "cpu")
 PIPELINE_OCR_DEVICE = os.getenv("PIPELINE_OCR_DEVICE", "cpu")
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
@@ -70,6 +78,7 @@ drawings: dict[str, DrawingRecord] = {}
 jobs: dict[str, PipelineJob] = {}
 jobs_lock = threading.Lock()
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_library()
@@ -79,7 +88,10 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="VPI P&ID Drawing Viewer", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "http://localhost:18731,http://127.0.0.1:18731,http://localhost:18180,http://127.0.0.1:18180").split(","),
+    allow_origins=os.getenv(
+        "CORS_ORIGINS",
+        "http://localhost:18731,http://127.0.0.1:18731,http://localhost:18180,http://127.0.0.1:18180",
+    ).split(","),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -88,8 +100,33 @@ app.include_router(symbol_library_router)
 
 def record_or_404(drawing_id: str) -> DrawingRecord:
     record = drawings.get(drawing_id)
+    if not record and re.fullmatch(r"[a-f0-9]{32}", drawing_id):
+        metadata = APP_ROOT / f"{drawing_id}.json"
+        if metadata.is_file():
+            data = json.loads(metadata.read_text(encoding="utf-8"))
+            source_path = APP_ROOT / f"{drawing_id}{data['extension']}"
+            if source_path.is_file():
+                record = DrawingRecord(
+                    drawing_id=drawing_id,
+                    source_path=source_path,
+                    **{
+                        key: data[key]
+                        for key in (
+                            "original_name",
+                            "source_type",
+                            "page_count",
+                            "width",
+                            "height",
+                            "max_zoom",
+                            "created_at",
+                        )
+                    },
+                )
+                drawings[drawing_id] = record
     if not record:
-        raise HTTPException(404, "Drawing is not available. Upload it again after a service restart.")
+        raise HTTPException(
+            404, "Drawing is not available. Upload it again after a service restart."
+        )
     return record
 
 
@@ -136,6 +173,42 @@ def drawing_payload(record: DrawingRecord) -> dict:
     }
 
 
+app.include_router(
+    create_annotation_router(record_or_404, page_image, lambda: APP_ROOT / "annotations")
+)
+
+
+@app.get("/api/v1/documents")
+def list_documents() -> list[dict]:
+    for metadata in APP_ROOT.glob("*.json"):
+        if re.fullmatch(r"[a-f0-9]{32}", metadata.stem):
+            try:
+                record_or_404(metadata.stem)
+            except (HTTPException, ValueError, KeyError):
+                continue
+    return [
+        drawing_payload(record)
+        for record in sorted(drawings.values(), key=lambda item: item.created_at, reverse=True)
+    ]
+
+
+@app.get("/api/v1/documents/{drawing_id}/pages/{page_number}")
+def get_document_page(drawing_id: str, page_number: int) -> dict:
+    record = record_or_404(drawing_id)
+    with Image.open(page_image(record, page_number)) as image:
+        width, height = image.size
+    base = f"/api/v1/documents/{drawing_id}/pages/{page_number}"
+    return {
+        **drawing_payload(record),
+        "page_number": page_number,
+        "width": width,
+        "height": height,
+        "max_zoom": max(0, math.ceil(math.log2(max(width, height) / TILE_SIZE))),
+        "preview_url": f"{base}/preview.jpg",
+        "tile_url_template": f"{base}/tiles/{{z}}/{{x}}/{{y}}.png",
+    }
+
+
 def save_preview(source: Path, destination: Path) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True)
     with Image.open(source) as image:
@@ -146,7 +219,7 @@ def save_preview(source: Path, destination: Path) -> None:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "storage": "memory-metadata"}
+    return {"status": "ok", "storage": "file-metadata"}
 
 
 @app.post("/api/v1/documents/upload", status_code=201)
@@ -164,7 +237,9 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
             while chunk := await file.read(1024 * 1024):
                 received += len(chunk)
                 if received > MAX_UPLOAD_BYTES:
-                    raise HTTPException(413, f"Tệp vượt giới hạn {MAX_UPLOAD_BYTES // 1024 // 1024} MB.")
+                    raise HTTPException(
+                        413, f"Tệp vượt giới hạn {MAX_UPLOAD_BYTES // 1024 // 1024} MB."
+                    )
                 output.write(chunk)
 
         if extension == ".pdf":
@@ -209,6 +284,27 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
         )
         preview_path = PREVIEW_ROOT / drawing_id / "preview.jpg"
         save_preview(page_image(record, 1), preview_path)
+        (APP_ROOT / f"{drawing_id}.json").write_text(
+            json.dumps(
+                {
+                    "extension": extension,
+                    **{
+                        key: getattr(record, key)
+                        for key in (
+                            "original_name",
+                            "source_type",
+                            "page_count",
+                            "width",
+                            "height",
+                            "max_zoom",
+                            "created_at",
+                        )
+                    },
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
         drawings[drawing_id] = record
         return drawing_payload(record)
     except HTTPException:
@@ -236,12 +332,20 @@ def job_payload(job: PipelineJob) -> dict:
         "error_message": job.error_message,
         "log_tail": job.log_lines[-20:] if job.status == "FAILED" else [],
         "results_url": f"/api/v1/jobs/{job.job_id}/results" if job.status == "COMPLETED" else None,
-        "final_results_url": f"/api/v1/jobs/{job.job_id}/final-results" if job.final_result_path else None,
+        "final_results_url": f"/api/v1/jobs/{job.job_id}/final-results"
+        if job.final_result_path
+        else None,
         "final_saved_at": job.final_saved_at,
     }
 
 
-def update_job(job: PipelineJob, *, status: str | None = None, stage: str | None = None, progress: int | None = None) -> None:
+def update_job(
+    job: PipelineJob,
+    *,
+    status: str | None = None,
+    stage: str | None = None,
+    progress: int | None = None,
+) -> None:
     with jobs_lock:
         if status is not None:
             job.status = status
@@ -278,15 +382,31 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
         if not script.is_file():
             raise FileNotFoundError("Không tìm thấy script pipeline trong container.")
         command = [
-            sys.executable, str(script), "--source", str(source), "--weights", str(PIPELINE_WEIGHTS),
-            "--output-dir", str(output_dir), "--device", PIPELINE_DEVICE, "--ocr-device", PIPELINE_OCR_DEVICE,
+            sys.executable,
+            str(script),
+            "--source",
+            str(source),
+            "--weights",
+            str(PIPELINE_WEIGHTS),
+            "--output-dir",
+            str(output_dir),
+            "--device",
+            PIPELINE_DEVICE,
+            "--ocr-device",
+            PIPELINE_OCR_DEVICE,
             "--build-editor",
         ]
         update_job(job, status="RUNNING", stage="STARTING", progress=4)
         environment = {**os.environ, "PYTHONPATH": str(REPO_ROOT / "src"), "PYTHONUNBUFFERED": "1"}
         process = subprocess.Popen(
-            command, cwd=REPO_ROOT, env=environment, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-            text=True, encoding="utf-8", errors="replace",
+            command,
+            cwd=REPO_ROOT,
+            env=environment,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
         )
         assert process.stdout is not None
         for line in process.stdout:
@@ -360,7 +480,9 @@ def save_final_results(job_id: str, scene: dict = Body(...)) -> dict:
 
     expected_collections = ("symbols", "texts", "lines", "topology_edges")
     if not all(isinstance(scene.get(name), list) for name in expected_collections):
-        raise HTTPException(422, "Review scene phải bao gồm symbols, texts, lines và topology_edges.")
+        raise HTTPException(
+            422, "Review scene phải bao gồm symbols, texts, lines và topology_edges."
+        )
 
     # A JSON round trip detaches the request object and guarantees a serializable
     # final artifact. The raw scene.json is intentionally retained for audit.
@@ -390,19 +512,27 @@ def get_preview(drawing_id: str, page_number: int) -> FileResponse:
     preview = PREVIEW_ROOT / drawing_id / preview_name
     if not preview.exists():
         save_preview(page_image(record, page_number), preview)
-    return FileResponse(preview, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"})
+    return FileResponse(
+        preview, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=3600"}
+    )
 
 
 @app.get("/api/v1/documents/{drawing_id}/pages/{page_number}/tiles/{zoom}/{tile_x}/{tile_y}.png")
-def get_tile(drawing_id: str, page_number: int, zoom: int, tile_x: int, tile_y: int) -> FileResponse:
+def get_tile(
+    drawing_id: str, page_number: int, zoom: int, tile_x: int, tile_y: int
+) -> FileResponse:
     record = record_or_404(drawing_id)
     if not 1 <= page_number <= record.page_count:
         raise HTTPException(404, "Page number is outside this document.")
-    if zoom < 0 or zoom > record.max_zoom or tile_x < 0 or tile_y < 0:
+    image_path = page_image(record, page_number)
+    with Image.open(image_path) as image:
+        width, height = image.size
+    max_zoom = max(0, math.ceil(math.log2(max(width, height) / TILE_SIZE)))
+    if zoom < 0 or zoom > max_zoom or tile_x < 0 or tile_y < 0:
         raise HTTPException(404, "Tile không tồn tại.")
-    scale_down = 2 ** (record.max_zoom - zoom)
-    level_width = math.ceil(record.width / scale_down)
-    level_height = math.ceil(record.height / scale_down)
+    scale_down = 2 ** (max_zoom - zoom)
+    level_width = math.ceil(width / scale_down)
+    level_height = math.ceil(height / scale_down)
     tiles_x = math.ceil(level_width / TILE_SIZE)
     tiles_y = math.ceil(level_height / TILE_SIZE)
     if tile_x >= tiles_x or tile_y >= tiles_y:
@@ -413,11 +543,16 @@ def get_tile(drawing_id: str, page_number: int, zoom: int, tile_x: int, tile_y: 
         destination.parent.mkdir(parents=True, exist_ok=True)
         left = tile_x * TILE_SIZE * scale_down
         top = tile_y * TILE_SIZE * scale_down
-        right = min(left + TILE_SIZE * scale_down, record.width)
-        bottom = min(top + TILE_SIZE * scale_down, record.height)
-        with Image.open(page_image(record, page_number)) as image:
+        right = min(left + TILE_SIZE * scale_down, width)
+        bottom = min(top + TILE_SIZE * scale_down, height)
+        with Image.open(image_path) as image:
             tile = image.convert("RGB").crop((left, top, right, bottom))
             if scale_down > 1:
-                tile = tile.resize((math.ceil(tile.width / scale_down), math.ceil(tile.height / scale_down)), Image.Resampling.LANCZOS)
+                tile = tile.resize(
+                    (math.ceil(tile.width / scale_down), math.ceil(tile.height / scale_down)),
+                    Image.Resampling.LANCZOS,
+                )
             tile.save(destination, "PNG", optimize=True)
-    return FileResponse(destination, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"})
+    return FileResponse(
+        destination, media_type="image/png", headers={"Cache-Control": "public, max-age=86400"}
+    )

@@ -24,13 +24,25 @@ Nếu không có dữ liệu cũ, kho ban đầu gồm đúng hai symbol chuẩn
 
 ## Import, sửa và xóa trên web
 
-Mở tab **Nhãn symbol**, nhập mã, tên, nhóm, chọn file gốc và ảnh xem trước rồi
-nhấn **Import vào kho**. Mỗi lần nhập một symbol; mã trùng bị từ chối. File gốc
-hỗ trợ DWG, DXF, PNG, JPG, WEBP, BMP, TIFF, PDF (tối đa 20 MB). Ảnh xem trước
-hỗ trợ PNG, JPG, WEBP (tối đa 5 MB) và được kiểm tra định dạng thực. Có thể
+Mở **Nhãn symbol**, chọn tab **Tạo nhãn mới**, nhập mã, tên, nhóm, chọn một ảnh gốc symbol rồi
+nhấn **Tạo nhãn mới**. Tab **Quản lý nhãn** chứa danh sách, tìm kiếm, lọc nhóm,
+xem chi tiết và thao tác chỉnh sửa/bật/tắt/xóa. Hai tab thay thanh công cụ bản vẽ
+khi đang ở phần Nhãn symbol. Nội dung form và bộ lọc được giữ khi chuyển qua lại
+giữa hai tab. Form chỉ có một ô tải ảnh và không hiển thị xem trước
+khi chọn file. Mỗi lần nhập một symbol; mã trùng bị từ chối. Ảnh gốc hỗ trợ
+PNG, JPG, WEBP, BMP, TIFF (tối đa 20 MB, mỗi chiều ít nhất 8 pixel, tối đa
+25 triệu pixel) và được kiểm tra định dạng thực. Backend giữ nguyên file gốc,
+tự tạo ảnh PNG tối đa 512 × 512 pixel để hiển thị trong kho và editor.
+API vẫn hỗ trợ nhập DWG, DXF, PDF kèm trường `preview` riêng (PNG, JPG, WEBP,
+tối đa 5 MB) cho các client cũ. Có thể
 sửa tên/nhóm, bật/tắt hoặc xóa symbol trong cùng màn hình. Xóa cần xác nhận và
 xóa cả hai file khỏi PostgreSQL; symbol đã xóa không xuất hiện lại sau restart.
 Bản vẽ đã lưu vẫn giữ các đối tượng được thêm trước đó.
+
+Bấm vào ảnh, mã hoặc tên symbol trong danh sách để mở popup chi tiết gồm
+ảnh xem trước, mã, tên, nhóm, trạng thái, nguồn, ngày tạo và lần cập nhật cuối
+(giờ Việt Nam), cùng liên kết tải file gốc. Đóng popup bằng nút Đóng, dấu X,
+phím Escape hoặc bấm ra ngoài popup.
 
 API: `GET /api/v1/symbol-library`, `POST /api/v1/symbol-library/import`,
 `PATCH /api/v1/symbol-library/{code}`, `DELETE /api/v1/symbol-library/{code}`

@@ -485,3 +485,10 @@ spikes/pid-line-detection/src/output/**
 !spikes/pid-line-detection/src/output/.gitkeep
 
 .DS_Store
+
+# Private source drawings, label crops and datasets stay on the local machine.
+/data/
+/label/
+/label_symbol/
+/PPID_SYMBOL/
+/paper/

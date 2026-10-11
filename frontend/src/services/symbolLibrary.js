@@ -8,13 +8,12 @@ async function read(response) {
 
 export const getSymbolLibrary = () => fetch(base).then(read);
 
-export function importSymbol({ code, name, category, source, preview }) {
+export function importSymbol({ code, name, category, source }) {
   const form = new FormData();
   form.append('code', code);
   form.append('name', name);
   form.append('category', category);
   form.append('source', source);
-  form.append('preview', preview);
   return fetch(`${base}/import`, { method: 'POST', body: form }).then(read);
 }
 

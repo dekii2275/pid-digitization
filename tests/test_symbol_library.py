@@ -20,15 +20,18 @@ from pathlib import Path
 
 import httpx
 import psycopg
-from psycopg import sql
 from fastapi import FastAPI
 from PIL import Image
+from psycopg import sql
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from app import symbol_library as library
 
 
-@unittest.skipUnless(os.getenv("SYMBOL_TEST_DATABASE") == "1", "Set SYMBOL_TEST_DATABASE=1 to run PostgreSQL integration tests")
+@unittest.skipUnless(
+    os.getenv("SYMBOL_TEST_DATABASE") == "1",
+    "Set SYMBOL_TEST_DATABASE=1 to run PostgreSQL integration tests",
+)
 class TestSymbolLibrary(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -62,8 +65,11 @@ class TestSymbolLibrary(unittest.TestCase):
     def request(self, method, path, **kwargs):
         async def send():
             transport = httpx.ASGITransport(app=self.app)
-            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+            async with httpx.AsyncClient(
+                transport=transport, base_url="http://testserver"
+            ) as client:
                 return await client.request(method, path, **kwargs)
+
         return asyncio.run(send())
 
     @staticmethod
@@ -86,26 +92,48 @@ class TestSymbolLibrary(unittest.TestCase):
         data = {"code": "VLV-003", "name": "Test Valve", "category": "Valves"}
         created = self.request("POST", "/api/v1/symbol-library/import", data=data, files=files)
         self.assertEqual(created.status_code, 201)
-        self.assertEqual(self.request("POST", "/api/v1/symbol-library/import", data=data, files=files).status_code, 409)
-        self.assertEqual(self.request("GET", "/api/v1/symbol-library/VLV-003/preview").content, preview)
-        self.assertEqual(self.request("GET", "/api/v1/symbol-library/VLV-003/source").content, b"example drawing data")
+        self.assertEqual(
+            self.request(
+                "POST", "/api/v1/symbol-library/import", data=data, files=files
+            ).status_code,
+            409,
+        )
+        self.assertEqual(
+            self.request("GET", "/api/v1/symbol-library/VLV-003/preview").content, preview
+        )
+        self.assertEqual(
+            self.request("GET", "/api/v1/symbol-library/VLV-003/source").content,
+            b"example drawing data",
+        )
 
-        changed = self.request("PATCH", "/api/v1/symbol-library/VLV-003", json={"enabled": False, "name": "Verified Valve"})
+        changed = self.request(
+            "PATCH",
+            "/api/v1/symbol-library/VLV-003",
+            json={"enabled": False, "name": "Verified Valve"},
+        )
         self.assertEqual(changed.status_code, 200)
         self.assertFalse(changed.json()["enabled"])
         self.assertEqual(self.request("DELETE", "/api/v1/symbol-library/VLV-003").status_code, 204)
-        self.assertEqual(self.request("GET", "/api/v1/symbol-library/VLV-003/preview").status_code, 404)
+        self.assertEqual(
+            self.request("GET", "/api/v1/symbol-library/VLV-003/preview").status_code, 404
+        )
         self.assertEqual(self.request("DELETE", "/api/v1/symbol-library/VLV-003").status_code, 404)
         self.assertEqual(self.request("DELETE", "/api/v1/symbol-library/CRV-001").status_code, 204)
         library.init_library()
-        self.assertEqual([item["code"] for item in self.request("GET", "/api/v1/symbol-library").json()], ["GLV-001"])
+        self.assertEqual(
+            [item["code"] for item in self.request("GET", "/api/v1/symbol-library").json()],
+            ["GLV-001"],
+        )
         with library.connection() as db:
-            self.assertEqual(db.execute("SELECT count(*) AS n FROM symbol_assets").fetchone()["n"], 2)
+            self.assertEqual(
+                db.execute("SELECT count(*) AS n FROM symbol_assets").fetchone()["n"], 2
+            )
 
     def test_invalid_preview_is_not_saved(self):
         library.init_library()
         response = self.request(
-            "POST", "/api/v1/symbol-library/import",
+            "POST",
+            "/api/v1/symbol-library/import",
             data={"code": "BAD-001", "name": "Bad", "category": "Valves"},
             files={
                 "source": ("bad.dwg", b"dwg", "application/acad"),
@@ -113,6 +141,63 @@ class TestSymbolLibrary(unittest.TestCase):
             },
         )
         self.assertEqual(response.status_code, 422)
+        self.assertEqual(len(self.request("GET", "/api/v1/symbol-library").json()), 2)
+
+    def test_source_only_import_preserves_original_and_creates_editor_image(self):
+        library.init_library()
+        formats = (
+            ("png", "PNG"),
+            ("jpg", "JPEG"),
+            ("jpeg", "JPEG"),
+            ("webp", "WEBP"),
+            ("bmp", "BMP"),
+            ("tif", "TIFF"),
+            ("tiff", "TIFF"),
+        )
+        for extension, image_format in formats:
+            with self.subTest(extension=extension):
+                source = io.BytesIO()
+                image = Image.new("RGBA" if image_format == "PNG" else "RGB", (1024, 256))
+                image.save(source, image_format)
+                original = source.getvalue()
+                code = f"SRC-{extension.upper()}"
+                response = self.request(
+                    "POST",
+                    "/api/v1/symbol-library/import",
+                    data={"code": code, "name": "Source-only symbol", "category": "Valves"},
+                    files={"source": (f"symbol.{extension}", original, Image.MIME[image_format])},
+                )
+                self.assertEqual(response.status_code, 201, response.text)
+                self.assertEqual(
+                    self.request("GET", response.json()["source_url"]).content, original
+                )
+                preview = self.request("GET", response.json()["preview"])
+                self.assertEqual(preview.headers["content-type"], "image/png")
+                with Image.open(io.BytesIO(preview.content)) as thumbnail:
+                    self.assertEqual(thumbnail.format, "PNG")
+                    self.assertEqual(thumbnail.size, (512, 128))
+                    if image_format == "PNG":
+                        self.assertEqual(thumbnail.getpixel((0, 0))[3], 0)
+        library.init_library()
+        self.assertEqual(len(self.request("GET", "/api/v1/symbol-library").json()), 9)
+
+    def test_invalid_source_only_import_does_not_save_symbol(self):
+        library.init_library()
+        jpeg = io.BytesIO()
+        Image.new("RGB", (24, 24)).save(jpeg, "JPEG")
+        for filename, content in (
+            ("bad.png", b"not an image"),
+            ("mismatch.png", jpeg.getvalue()),
+            ("drawing.dwg", b"dwg"),
+        ):
+            with self.subTest(filename=filename):
+                response = self.request(
+                    "POST",
+                    "/api/v1/symbol-library/import",
+                    data={"code": "BAD-SOURCE", "name": "Invalid source", "category": "Valves"},
+                    files={"source": (filename, content, "application/octet-stream")},
+                )
+                self.assertEqual(response.status_code, 422, response.text)
         self.assertEqual(len(self.request("GET", "/api/v1/symbol-library").json()), 2)
 
     def test_migrates_sqlite_bytes_once_without_reseeding(self):
@@ -133,7 +218,19 @@ class TestSymbolLibrary(unittest.TestCase):
             """)
             old.execute(
                 "INSERT INTO symbol_definitions VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                ("LEG-001", "Legacy Valve", "Valves", 1, "web-import", None, None, None, None, now, now),
+                (
+                    "LEG-001",
+                    "Legacy Valve",
+                    "Valves",
+                    1,
+                    "web-import",
+                    None,
+                    None,
+                    None,
+                    None,
+                    now,
+                    now,
+                ),
             )
             for role, filename, data, mime in (
                 ("source", "legacy.dwg", b"legacy drawing", "application/acad"),
@@ -143,12 +240,26 @@ class TestSymbolLibrary(unittest.TestCase):
                 (library.ASSET_DIR / storage_name).write_bytes(data)
                 old.execute(
                     "INSERT INTO symbol_assets (symbol_code, role, filename, content_type, sha256, byte_size, storage_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    ("LEG-001", role, filename, mime, hashlib.sha256(data).hexdigest(), len(data), storage_name, now),
+                    (
+                        "LEG-001",
+                        role,
+                        filename,
+                        mime,
+                        hashlib.sha256(data).hexdigest(),
+                        len(data),
+                        storage_name,
+                        now,
+                    ),
                 )
 
         library.init_library()
-        self.assertEqual([item["code"] for item in self.request("GET", "/api/v1/symbol-library").json()], ["LEG-001"])
-        self.assertEqual(self.request("GET", "/api/v1/symbol-library/LEG-001/source").content, b"legacy drawing")
+        self.assertEqual(
+            [item["code"] for item in self.request("GET", "/api/v1/symbol-library").json()],
+            ["LEG-001"],
+        )
+        self.assertEqual(
+            self.request("GET", "/api/v1/symbol-library/LEG-001/source").content, b"legacy drawing"
+        )
         self.assertEqual(self.request("DELETE", "/api/v1/symbol-library/LEG-001").status_code, 204)
         library.init_library()
         self.assertEqual(self.request("GET", "/api/v1/symbol-library").json(), [])

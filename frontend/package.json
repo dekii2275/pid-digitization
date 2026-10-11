@@ -10,7 +10,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "format": "prettier --write src/App.jsx src/App.css \"src/components/*Symbol*.jsx\" src/components/GenerateDataWorkspace.jsx src/components/TiledDrawingCanvas.jsx src/services/annotations.js src/services/symbolLibrary.js",
+    "format:check": "prettier --check src/App.jsx src/App.css \"src/components/*Symbol*.jsx\" src/components/GenerateDataWorkspace.jsx src/components/TiledDrawingCanvas.jsx src/services/annotations.js src/services/symbolLibrary.js"
   },
   "dependencies": {
     "cytoscape": "^3.34.3",
@@ -23,6 +25,7 @@
     "@types/react-dom": "^19.2.7",
     "@vitejs/plugin-react": "^6.1.1",
     "oxlint": "^1.81.0",
+    "prettier": "3.6.2",
     "vite": "^8.3.0"
   }
 }
