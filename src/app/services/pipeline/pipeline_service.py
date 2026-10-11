@@ -59,7 +59,9 @@ class PipelineService:
             if not source_path.is_file():
                 raise FileNotFoundError(f"Uploaded drawing does not exist: {source_path}")
             if drawing.file_type != "image":
-                raise ValueError("YOLO symbol detection currently accepts raster image uploads only.")
+                raise ValueError(
+                    "YOLO symbol detection currently accepts raster image uploads only."
+                )
 
             # A re-run replaces generated data from that drawing only. Any human
             # corrections (source=USER) are intentionally kept.

@@ -26,10 +26,9 @@ Freezes and validates the baseline outputs of the P&ID digitization pipeline on 
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import sys
 import unittest
-
+from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKSPACE_ROOT = REPO_ROOT.parent
@@ -85,7 +84,9 @@ class TestM0PipelineInvariants(unittest.TestCase):
 
         detections = pages[0].get("detections", [])
         self.assertGreater(len(detections), 0, "Invariant violated: symbols count == 0")
-        self.assertGreaterEqual(len(detections), 1000, f"Expected ~1208 detections, got {len(detections)}")
+        self.assertGreaterEqual(
+            len(detections), 1000, f"Expected ~1208 detections, got {len(detections)}"
+        )
 
         for det in detections:
             self.assertIn("class_name", det)
@@ -100,8 +101,12 @@ class TestM0PipelineInvariants(unittest.TestCase):
 
             self.assertLessEqual(x1, x2)
             self.assertLessEqual(y1, y2)
-            self.assertTrue(0 <= x1 <= self.width and 0 <= x2 <= self.width, f"x out of bounds: {bbox}")
-            self.assertTrue(0 <= y1 <= self.height and 0 <= y2 <= self.height, f"y out of bounds: {bbox}")
+            self.assertTrue(
+                0 <= x1 <= self.width and 0 <= x2 <= self.width, f"x out of bounds: {bbox}"
+            )
+            self.assertTrue(
+                0 <= y1 <= self.height and 0 <= y2 <= self.height, f"y out of bounds: {bbox}"
+            )
 
     def test_03_ocr_invariants(self):
         pages = self.ocr_data.get("pages", [])
@@ -124,8 +129,12 @@ class TestM0PipelineInvariants(unittest.TestCase):
 
             self.assertLessEqual(x1, x2)
             self.assertLessEqual(y1, y2)
-            self.assertTrue(0 <= x1 <= self.width and 0 <= x2 <= self.width, f"x out of bounds: {bbox}")
-            self.assertTrue(0 <= y1 <= self.height and 0 <= y2 <= self.height, f"y out of bounds: {bbox}")
+            self.assertTrue(
+                0 <= x1 <= self.width and 0 <= x2 <= self.width, f"x out of bounds: {bbox}"
+            )
+            self.assertTrue(
+                0 <= y1 <= self.height and 0 <= y2 <= self.height, f"y out of bounds: {bbox}"
+            )
 
     def test_04_lines_invariants(self):
         lines = self.lines_data.get("lines", [])
@@ -153,7 +162,9 @@ class TestM0PipelineInvariants(unittest.TestCase):
         self.assertGreater(counts.get("symbol_detections", 0), 0)
         self.assertGreater(counts.get("ocr_texts", 0), 0)
         self.assertGreater(counts.get("line_segments", 0), 0)
-        self.assertGreater(counts.get("connected_assets", 0), 0, "Invariant violated: connected_assets == 0")
+        self.assertGreater(
+            counts.get("connected_assets", 0), 0, "Invariant violated: connected_assets == 0"
+        )
 
         details = self.connectivity.get("image_details", {})
         self.assertEqual(details.get("width"), self.width)

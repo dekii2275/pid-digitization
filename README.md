@@ -16,14 +16,17 @@ service and a local YOLOv8 symbol-detector workflow. The default application is
 - [Plan for a self-hosted/open-source rebuild](docs/open-source-rebuild-plan.md)
 - [Docker deployment guide](DEPLOYMENT.md)
 - [Symbol catalog storage and web import](docs/symbol_library.md)
+- [Code style and source validation](docs/code-style.md)
 
 ## Quick start
 
 ### Run the drawing review app
 
 The default Docker Compose profile starts the React UI, FastAPI drawing service,
-and PostgreSQL. The reviewed symbol catalog and its files are stored in the
-PostgreSQL volume. Uploaded drawings and generated previews use local bind mounts.
+PostgreSQL and MinIO. Original drawing files are stored in MinIO; drawing metadata,
+manual annotations and the reviewed symbol catalog are stored in PostgreSQL.
+Generated previews and tiles use local caches. The **Data** tab manages uploads,
+deletions, drawing lists and saved labels; see [drawing management](docs/data.md).
 
 ```powershell
 Copy-Item .env.docker.example .env  # only if .env does not exist
@@ -52,7 +55,7 @@ The repository contains two complementary workflows:
   reconstruction from a P&ID/PFD image or PDF.
 
 For every profile, copy `.env.docker.example` to `.env` and set a
-unique database password before deploying outside a local development machine.
+unique database and MinIO passwords before deploying outside a local development machine.
 
 ### Run the local ML pipeline
 
@@ -81,8 +84,7 @@ git diff --cached --check
 git commit -m "Describe your change"
 ```
 
-The configured `origin` points to the project repository, while `upstream`
-points to Azure Samples. Push your branch to `origin`:
+The configured `origin` points to the project repository. Push your branch to `origin`:
 
 ```powershell
 git push origin main
@@ -112,11 +114,13 @@ generated outputs do not; put them in the documented local locations instead.
 The original FastAPI service keeps its external symbol-detection and Azure
 integration contracts under `app.main`. The default web API (`app.web_main`)
 invokes the local YOLO/OCR/line/topology pipeline and produces an editable
-scene. Drawing/job metadata is in memory and must be re-uploaded after backend
-restart; symbol definitions and their files persist in PostgreSQL.
+scene. Original drawings persist in MinIO; drawing metadata, annotations and
+symbol definitions persist in PostgreSQL. Pipeline jobs remain in memory.
 
 ## Validation
 
 See [DEPLOYMENT.md](DEPLOYMENT.md#kiểm-thử) for regression tests and
 `python scripts/smoke_web.py --pipeline` for the deployed end-to-end check.
-CI verifies a new Docker stack from tracked source and an empty database.
+See [code style](docs/code-style.md) for formatting and lint commands.
+CI checks Python and frontend style, builds the UI, and verifies a new Docker
+stack from tracked source and an empty database.

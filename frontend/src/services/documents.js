@@ -3,7 +3,10 @@ const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 export async function uploadDrawingDocument(file) {
   const formData = new FormData();
   formData.append('file', file);
-  const response = await fetch(`${apiBaseUrl}/documents/upload`, { method: 'POST', body: formData });
+  const response = await fetch(`${apiBaseUrl}/documents/upload`, {
+    method: 'POST',
+    body: formData,
+  });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(payload.detail || 'Không thể tải bản vẽ lên.');
   return payload;
@@ -12,8 +15,15 @@ export async function uploadDrawingDocument(file) {
 async function getJson(path, options) {
   const response = await fetch(`${apiBaseUrl}${path}`, options);
   const payload = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(payload.detail || 'Không thể gọi pipeline.');
+  if (!response.ok)
+    throw new Error(
+      typeof payload.detail === 'string' ? payload.detail : 'Không thể xử lý yêu cầu.',
+    );
   return payload;
+}
+
+export function deleteDrawingDocument(drawingId) {
+  return getJson(`/documents/${encodeURIComponent(drawingId)}`, { method: 'DELETE' });
 }
 
 export function runAllPipeline(drawingId) {

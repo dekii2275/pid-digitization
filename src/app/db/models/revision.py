@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, JSON
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -13,7 +14,9 @@ class Revision(Base):
     __tablename__ = "revisions"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    drawing_id = Column(Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True)
+    drawing_id = Column(
+        Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     entity_type = Column(String(50), nullable=False, index=True)  # symbol, ocr, line, relationship
     entity_id = Column(Integer, nullable=False, index=True)
@@ -32,7 +35,9 @@ class AuditLog(Base):
     __tablename__ = "audit_logs"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    drawing_id = Column(Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True)
+    drawing_id = Column(
+        Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     action = Column(String(100), nullable=False, index=True)
     details = Column(JSON, nullable=True)

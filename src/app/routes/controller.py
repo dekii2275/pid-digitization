@@ -1,17 +1,20 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, Depends
-from fastapi_health import health
-from app.routes.controllers.pid_digitization_controller import router as pid_digitalization_router
-from app.services.symbol_detection.symbol_detection_endpoint_client import symbol_detection_endpoint_client
-from app.services.blob_storage_client import blob_storage_client
-import logger_config
-from app.routes.tracing_middleware import TracingMiddleware
 
+from fastapi import Depends, FastAPI
+from fastapi_health import health
+
+import logger_config
+from app.routes.controllers.pid_digitization_controller import router as pid_digitalization_router
+from app.routes.tracing_middleware import TracingMiddleware
+from app.services.blob_storage_client import blob_storage_client
+from app.services.symbol_detection.symbol_detection_endpoint_client import (
+    symbol_detection_endpoint_client,
+)
 
 logger = logger_config.get_logger(__name__)
-logger.info('Starting python PID Digitization application')
+logger.info("Starting python PID Digitization application")
 
 
 def applicationLivenessCheck():
@@ -32,7 +35,9 @@ def is_application_ready(readiness_check: bool = Depends(applicationReadinessChe
     return readiness_check
 
 
-def is_dependency_online(startup_status: bool = Depends(symbol_detection_endpoint_client.check_health)):
+def is_dependency_online(
+    startup_status: bool = Depends(symbol_detection_endpoint_client.check_health),
+):
     logger.info("Checking if the dependent service is online: " + str(startup_status))
     return startup_status
 

@@ -25,10 +25,8 @@ from typing import Any, Iterable, Sequence
 
 import cv2
 import numpy as np
-
 from ocr_baseline import clip_bbox
 from tiled_inference import iter_input_pages
-
 
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -153,11 +151,15 @@ def validate_args(args: argparse.Namespace) -> None:
     if not 0 <= args.binary_threshold <= 254:
         raise ValueError("binary-threshold must be 0 (Otsu) or in [1, 254]")
     if args.threshold <= 0 or args.min_line_length <= 0 or args.merge_gap < 0:
-        raise ValueError("threshold and min-line-length must be positive; merge-gap must be non-negative")
+        raise ValueError(
+            "threshold and min-line-length must be positive; merge-gap must be non-negative"
+        )
     if not 0 < args.angle_tolerance < 45:
         raise ValueError("angle-tolerance must be in (0, 45)")
     if args.merge_distance < 0 or args.hough_rho <= 0 or args.hough_theta_degrees <= 0:
-        raise ValueError("merge-distance, hough-rho, and hough-theta-degrees must be positive or zero as applicable")
+        raise ValueError(
+            "merge-distance, hough-rho, and hough-theta-degrees must be positive or zero as applicable"
+        )
 
 
 def _page_payload(document: Any, page_number: int) -> Any:
@@ -278,8 +280,7 @@ def _zhang_suen_numpy(binary: np.ndarray) -> np.ndarray:
             padded[:-2, :-2],
         ]
         transitions = sum(
-            ((neighbours[index] == 0) & (neighbours[(index + 1) % 8] == 1))
-            for index in range(8)
+            ((neighbours[index] == 0) & (neighbours[(index + 1) % 8] == 1)) for index in range(8)
         )
         neighbour_count = sum(neighbours)
         remove = (
@@ -305,8 +306,7 @@ def _zhang_suen_numpy(binary: np.ndarray) -> np.ndarray:
             padded[:-2, :-2],
         ]
         transitions = sum(
-            ((neighbours[index] == 0) & (neighbours[(index + 1) % 8] == 1))
-            for index in range(8)
+            ((neighbours[index] == 0) & (neighbours[(index + 1) % 8] == 1)) for index in range(8)
         )
         neighbour_count = sum(neighbours)
         remove = (
@@ -350,7 +350,9 @@ def _runs(values: np.ndarray, max_gap: int) -> Iterable[tuple[int, int]]:
     yield start, previous
 
 
-def detect_axis_segments(skeleton: np.ndarray, min_length: float, merge_gap: float) -> list[Segment]:
+def detect_axis_segments(
+    skeleton: np.ndarray, min_length: float, merge_gap: float
+) -> list[Segment]:
     """Detect horizontal and vertical segments by traversing skeleton rows/columns."""
 
     gap = max(0, int(round(merge_gap)))
@@ -418,7 +420,9 @@ def _angle_difference(first: float, second: float) -> float:
     return min(delta, 180.0 - delta)
 
 
-def _mergeable(first: Segment, second: Segment, merge_gap: float, merge_distance: float, angle_tolerance: float) -> bool:
+def _mergeable(
+    first: Segment, second: Segment, merge_gap: float, merge_distance: float, angle_tolerance: float
+) -> bool:
     if first.orientation != second.orientation:
         return False
     if _angle_difference(first.angle, second.angle) > angle_tolerance:
@@ -456,7 +460,9 @@ def _mergeable(first: Segment, second: Segment, merge_gap: float, merge_distance
     )
     first_interval = sorted((projection(first.x1, first.y1), projection(first.x2, first.y2)))
     second_interval = sorted((projection(second.x1, second.y1), projection(second.x2, second.y2)))
-    gap = max(0.0, max(first_interval[0], second_interval[0]) - min(first_interval[1], second_interval[1]))
+    gap = max(
+        0.0, max(first_interval[0], second_interval[0]) - min(first_interval[1], second_interval[1])
+    )
     return distance <= merge_distance and gap <= merge_gap
 
 
@@ -484,7 +490,12 @@ def _merge_pair(first: Segment, second: Segment) -> Segment:
     dy = first.y2 - first.y1
     length = math.hypot(dx, dy)
     ux, uy = dx / length, dy / length
-    points = [(first.x1, first.y1), (first.x2, first.y2), (second.x1, second.y1), (second.x2, second.y2)]
+    points = [
+        (first.x1, first.y1),
+        (first.x2, first.y2),
+        (second.x1, second.y1),
+        (second.x2, second.y2),
+    ]
     projections = [x * ux + y * uy for x, y in points]
     base_projection = first.x1 * ux + first.y1 * uy
     low, high = min(projections), max(projections)

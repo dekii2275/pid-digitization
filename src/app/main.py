@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import logging
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
-from app.core.config import settings
 from app.api.v1 import api_v1_router
+from app.core.config import settings
 
 logging.basicConfig(
     level=logging.INFO,
@@ -52,6 +53,7 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host=settings.HOST,

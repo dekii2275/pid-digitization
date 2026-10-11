@@ -33,38 +33,52 @@ export function Navbar({ currentDrawing, onSelectDrawing, onNewDrawing }) {
   }, [fetchDrawingsList]);
 
   return (
-    <header style={{
-      background: 'var(--bg-secondary)',
-      borderBottom: '1px solid var(--border-color)',
-      padding: '0.75rem 1.5rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      position: 'sticky',
-      top: 0,
-      zIndex: 50,
-    }}>
+    <header
+      style={{
+        background: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border-color)',
+        padding: '0.75rem 1.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        position: 'sticky',
+        top: 0,
+        zIndex: 50,
+      }}
+    >
       {/* Brand & Project Title */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-        <div style={{
-          width: '38px',
-          height: '38px',
-          borderRadius: '8px',
-          background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'white',
-          boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)'
-        }}>
+        <div
+          style={{
+            width: '38px',
+            height: '38px',
+            borderRadius: '8px',
+            background: 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: 'white',
+            boxShadow: '0 4px 12px rgba(14, 165, 233, 0.3)',
+          }}
+        >
           <Layers size={22} />
         </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <h1 style={{ fontSize: '1.1rem', fontWeight: '700', letterSpacing: '-0.02em', color: '#fff' }}>
+            <h1
+              style={{
+                fontSize: '1.1rem',
+                fontWeight: '700',
+                letterSpacing: '-0.02em',
+                color: '#fff',
+              }}
+            >
               vpi_detect_and_ocr
             </h1>
-            <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)' }}>
+            <span
+              className="badge"
+              style={{ background: 'rgba(56, 189, 248, 0.15)', color: 'var(--accent-cyan)' }}
+            >
               v1.0.0
             </span>
           </div>
@@ -116,26 +130,25 @@ export function Navbar({ currentDrawing, onSelectDrawing, onNewDrawing }) {
           </button>
         </div>
 
-        <button
-          className="btn btn-primary btn-sm"
-          onClick={onNewDrawing}
-        >
+        <button className="btn btn-primary btn-sm" onClick={onNewDrawing}>
           + Tải lên P&ID mới
         </button>
 
         {/* Backend Status Indicator */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '0.4rem',
-          padding: '0.3rem 0.6rem',
-          borderRadius: '9999px',
-          background: isBackendHealthy ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-          border: `1px solid ${isBackendHealthy ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
-          fontSize: '0.75rem',
-          fontWeight: '500',
-          color: isBackendHealthy ? 'var(--accent-green)' : 'var(--accent-red)',
-        }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '0.4rem',
+            padding: '0.3rem 0.6rem',
+            borderRadius: '9999px',
+            background: isBackendHealthy ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
+            border: `1px solid ${isBackendHealthy ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`,
+            fontSize: '0.75rem',
+            fontWeight: '500',
+            color: isBackendHealthy ? 'var(--accent-green)' : 'var(--accent-red)',
+          }}
+        >
           {isBackendHealthy ? <CheckCircle2 size={13} /> : <AlertCircle size={13} />}
           <span>{isBackendHealthy ? 'API Online' : 'API Offline'}</span>
         </div>

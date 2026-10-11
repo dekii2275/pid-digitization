@@ -4,9 +4,10 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 const configuredServerHost = import.meta.env.VITE_SERVER_HOST;
-const SERVER_HOST = configuredServerHost === '__SAME_ORIGIN__'
-  ? window.location.origin
-  : configuredServerHost || window.location.origin;
+const SERVER_HOST =
+  configuredServerHost === '__SAME_ORIGIN__'
+    ? window.location.origin
+    : configuredServerHost || window.location.origin;
 
 export const api = {
   // Projects
@@ -63,7 +64,9 @@ export const api = {
 
   // Symbols (Object Detection)
   async getSymbols(drawingId, minConfidence = 0.0) {
-    const res = await fetch(`${API_BASE_URL}/drawings/${drawingId}/symbols?min_confidence=${minConfidence}`);
+    const res = await fetch(
+      `${API_BASE_URL}/drawings/${drawingId}/symbols?min_confidence=${minConfidence}`,
+    );
     if (!res.ok) throw new Error('Failed to fetch symbols');
     return res.json();
   },
@@ -111,7 +114,9 @@ export const api = {
 
   // Tag Search
   async searchTag(drawingId, tag) {
-    const res = await fetch(`${API_BASE_URL}/search?drawing_id=${drawingId}&tag=${encodeURIComponent(tag)}`);
+    const res = await fetch(
+      `${API_BASE_URL}/search?drawing_id=${drawingId}&tag=${encodeURIComponent(tag)}`,
+    );
     if (!res.ok) throw new Error('Tag not found');
     return res.json();
   },

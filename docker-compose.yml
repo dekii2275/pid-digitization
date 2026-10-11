@@ -30,10 +30,17 @@ services:
       PIPELINE_DEVICE: cpu
       PIPELINE_OCR_DEVICE: cpu
       MAX_UPLOAD_BYTES: 104857600
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-pid_minio}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-change-this-minio-password}
+      MINIO_BUCKET: ${MINIO_BUCKET:-pid-drawings}
+      MINIO_SECURE: "false"
     ports:
       - "${BACKEND_HOST_PORT:-18732}:8000"
     depends_on:
       db:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     volumes:
       - ./uploads:/app/uploads
@@ -103,6 +110,27 @@ services:
       retries: 10
     restart: unless-stopped
 
+  minio:
+    build:
+      context: .
+      dockerfile: docker/minio.Dockerfile
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-pid_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-change-this-minio-password}
+    ports:
+      - "127.0.0.1:${MINIO_HOST_PORT:-18735}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_HOST_PORT:-18736}:9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   redis_data:
+  minio_data:

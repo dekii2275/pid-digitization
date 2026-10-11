@@ -4,7 +4,8 @@ from enum import Enum
 
 
 class ArrowDirection(str, Enum):
-    '''Enum for the flow direction'''
+    """Enum for the flow direction"""
+
     unknown = "unknown"
     up = "up"
     left = "left"

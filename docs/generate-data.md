@@ -12,11 +12,19 @@ pipeline AI. Kết quả Review/pipeline được giữ riêng.
 
 ## Symbol
 
-1. Tải PNG/JPG/PDF, hoặc chọn một bản vẽ đã tải. Với PDF, chọn trang cần làm.
+1. Bấm **Chọn bản vẽ từ Data** để mở bản vẽ có sẵn: tìm theo tên, lọc
+   **Đã gán nhãn / Chưa gán nhãn**, chọn bản vẽ và trang, rồi bấm
+   **Mở để chỉnh sửa**. Nhãn đã lưu được tải lại để tiếp tục sửa; không cần
+   import lại. Có thể dùng **Tải ảnh / PDF** để thêm bản vẽ mới.
+   PDF mới tự chuyển sang PNG ở tối đa **144 DPI** trước khi
+   gán nhãn; trang đầu chuyển khi upload, các trang khác chuyển khi mở. Trang
+   khổ lớn được giảm DPI vừa đủ để không vượt **16 triệu pixel/trang**. Ảnh
+   PNG/JPG giữ độ phân giải gốc; ảnh scan mờ không tự có thêm chi tiết mới.
 2. Tìm mã/tên hoặc lọc nhóm trong thư viện, rồi chọn một nhãn.
 3. Kéo trên ảnh để khoanh vùng. Có thể tiếp tục khoanh nhiều symbol cùng nhãn.
 4. Chọn **Chọn / sửa**, bấm vào vùng để kéo vị trí hoặc kéo các góc để đổi kích
-   thước. Có thể sửa nhãn và tọa độ/kích thước trong phần Thông tin vùng chọn.
+   thước. Popup **Thông tin vùng chọn** mở bên phải bản vẽ để sửa nhãn và
+   tọa độ/kích thước. Bấm **×** hoặc Esc để đóng; bấm vùng khác để đổi nội dung.
 5. Bấm **Lưu nhãn** hoặc **Xuất dataset**. Xuất sẽ lưu trước rồi tải ZIP.
 
 Lăn chuột để zoom; kéo nền hoặc chọn **Di chuyển ảnh** để pan. Các thao tác
@@ -24,6 +32,10 @@ luôn dùng tọa độ pixel của ảnh gốc, không dùng tọa độ ảnh 
 **Hoàn tác/Làm lại** giữ tối đa 50 thao tác; Ctrl/Cmd+Z để hoàn tác,
 Ctrl/Cmd+Shift+Z để làm lại, Delete để xóa vùng chọn, Esc để hủy khoanh.
 Xóa một vùng đồng thời xóa các quan hệ tham chiếu vùng đó.
+Trên bản vẽ chỉ hiển thị bounding box, không phủ mã nhãn hoặc nội dung OCR
+lên ảnh (kể cả khi đang khoanh). Nhãn và chữ OCR xem/sửa trong popup bên phải
+khi chọn vùng và được lưu/xuất đầy đủ. PDF đã tải trước thay đổi này giữ độ phân giải
+đã lưu để tránh làm lệch tọa độ nhãn cũ.
 
 ## OCR và quan hệ
 

@@ -1,11 +1,11 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 import os
+import sys
 import unittest
 from unittest.mock import MagicMock
-import sys
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from app.services.blob_storage_client import BlobStorageClient
 
 
@@ -13,10 +13,10 @@ class TestUploadBytes(unittest.IsolatedAsyncioTestCase):
     async def test_happy_path(self):
         # arrange
         async def mock_upload_blob(*args, **kwargs):
-            return {'uploaded': True}
+            return {"uploaded": True}
 
-        blob_name = 'blob-name'
-        bytes = b'bytes'
+        blob_name = "blob-name"
+        bytes = b"bytes"
 
         blob_client = MagicMock()
         blob_client.upload_blob = MagicMock(wraps=mock_upload_blob)
@@ -39,24 +39,24 @@ class TestUploadBytes(unittest.IsolatedAsyncioTestCase):
 
         # act
         with self.assertRaises(Exception) as e:
-            await blob_storage_client.upload_bytes('blob-name', b'bytes')
+            await blob_storage_client.upload_bytes("blob-name", b"bytes")
 
         # assert
-        self.assertEqual(str(e.exception), 'Blob storage client is not initialized')
+        self.assertEqual(str(e.exception), "Blob storage client is not initialized")
 
 
 class TestDownloadBytes(unittest.IsolatedAsyncioTestCase):
     async def test_happy_path(self):
         # arrange
         async def mock_readall(*args, **kwargs):
-            return b'bytes'
+            return b"bytes"
 
         def mock_download_blob(*args, **kwargs):
             blob = MagicMock()
             blob.readall = MagicMock(wraps=mock_readall)
             return blob
 
-        blob_name = 'blob-name'
+        blob_name = "blob-name"
 
         blob_client = MagicMock()
         blob_client.download_blob = MagicMock(wraps=mock_download_blob)
@@ -72,7 +72,7 @@ class TestDownloadBytes(unittest.IsolatedAsyncioTestCase):
         # assert
         container_client.get_blob_client.assert_called_once_with(blob_name)
         blob_client.download_blob.assert_called_once_with()
-        self.assertEqual(result, b'bytes')
+        self.assertEqual(result, b"bytes")
 
     async def test_blob_client_not_exists_throws_exception(self):
         # arrange
@@ -80,10 +80,10 @@ class TestDownloadBytes(unittest.IsolatedAsyncioTestCase):
 
         # act
         with self.assertRaises(Exception) as e:
-            await blob_storage_client.download_bytes('blob-name')
+            await blob_storage_client.download_bytes("blob-name")
 
         # assert
-        self.assertEqual(str(e.exception), 'Blob storage client is not initialized')
+        self.assertEqual(str(e.exception), "Blob storage client is not initialized")
 
 
 class TestBlobExists(unittest.IsolatedAsyncioTestCase):
@@ -92,7 +92,7 @@ class TestBlobExists(unittest.IsolatedAsyncioTestCase):
         async def mock_exists(*args, **kwargs):
             return True
 
-        blob_name = 'blob-name'
+        blob_name = "blob-name"
 
         blob_client = MagicMock()
         blob_client.exists = MagicMock(wraps=mock_exists)
@@ -110,14 +110,13 @@ class TestBlobExists(unittest.IsolatedAsyncioTestCase):
         blob_client.exists.assert_called_once_with()
         self.assertEqual(result, True)
 
-    
     async def test_blob_client_not_exists_throws_exception(self):
         # arrange
         blob_storage_client = BlobStorageClient(MagicMock(), MagicMock())
 
         # act
         with self.assertRaises(Exception) as e:
-            await blob_storage_client.blob_exists('blob-name')
+            await blob_storage_client.blob_exists("blob-name")
 
         # assert
-        self.assertEqual(str(e.exception), 'Blob storage client is not initialized')
+        self.assertEqual(str(e.exception), "Blob storage client is not initialized")

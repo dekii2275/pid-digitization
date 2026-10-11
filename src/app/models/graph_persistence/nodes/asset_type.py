@@ -4,26 +4,29 @@ from pydantic import BaseModel, validator
 
 
 class AssetType(BaseModel):
-    '''This class represents the Asset Type node in the graph database.'''
+    """This class represents the Asset Type node in the graph database."""
+
     uniquestring: str = None
 
     @property
     def category(self) -> str:
-        return self.uniquestring.split('/')[0]
+        return self.uniquestring.split("/")[0]
 
     @property
     def subcategory(self) -> str:
-        return self.uniquestring.split('/')[1]
+        return self.uniquestring.split("/")[1]
 
     @property
     def displayname(self) -> str:
-        return self.uniquestring.split('/')[2]
+        return self.uniquestring.split("/")[2]
 
-    @validator('uniquestring')
+    @validator("uniquestring")
     def validate_uniquestring(cls, value):
-        parts = value.split('/')
+        parts = value.split("/")
 
         if len(parts) != 3:
-            raise ValueError(f'Asset Type label must be in the form of "category/subcategory/displayname". Got "{value}".')
+            raise ValueError(
+                f'Asset Type label must be in the form of "category/subcategory/displayname". Got "{value}".'
+            )
 
         return value

@@ -19,7 +19,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import httpx
-import psycopg
 from fastapi import FastAPI
 from PIL import Image
 from psycopg import sql

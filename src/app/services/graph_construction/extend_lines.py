@@ -1,16 +1,15 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-from app.models.line_detection.line_segment import LineSegment
 import math
 
-from app.models.graph_construction.extended_line_segment \
-                                                import ExtendedLineSegment
+from app.models.graph_construction.extended_line_segment import ExtendedLineSegment
+from app.models.line_detection.line_segment import LineSegment
 
 
 def get_slope_between_points(x1, y1, x2, y2):
-    '''
+    """
     Returns the slope between two points.
-    '''
+    """
     x_delta = x2 - x1
     if x_delta == 0:
         return math.inf
@@ -18,9 +17,9 @@ def get_slope_between_points(x1, y1, x2, y2):
 
 
 def extend_lines(
-        line_segments: list[LineSegment],
-        line_segment_padding_default: float,
-        ) -> list[ExtendedLineSegment]:
+    line_segments: list[LineSegment],
+    line_segment_padding_default: float,
+) -> list[ExtendedLineSegment]:
     """
     Extend lines to the edges of the image
     :param line_segments: list of line segments
@@ -31,8 +30,7 @@ def extend_lines(
     extended_line_segments = []
 
     for line in line_segments:
-        slope = get_slope_between_points(line.startX, line.startY,
-                                         line.endX, line.endY)
+        slope = get_slope_between_points(line.startX, line.startY, line.endX, line.endY)
 
         b = 0
         # If the slope is not infinite (i.e., the line is not vertical)
@@ -64,7 +62,7 @@ def extend_lines(
                 startY=round(start_y, 5),
                 endX=round(end_x, 5),
                 endY=round(end_y, 5),
-                slope=round(slope, 5)
+                slope=round(slope, 5),
             )
         )
 

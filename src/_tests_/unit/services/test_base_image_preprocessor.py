@@ -1,21 +1,22 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-import cv2
 import os
 import sys
-import numpy as np
 import unittest
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+import cv2
+import numpy as np
+
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from app.services.base_image_preprocessor import to_binary, to_grayscale
 
-input_data_path = os.path.join(os.path.dirname(__file__), 'data', 'input')
+input_data_path = os.path.join(os.path.dirname(__file__), "data", "input")
 
 
 class TestBaseImagePreprocessor(unittest.TestCase):
     def test_preprocessing_methods(self):
         # Create a test image
-        input_image_path = os.path.join(input_data_path, 'image.png')
+        input_image_path = os.path.join(input_data_path, "image.png")
         image = cv2.imread(input_image_path)
 
         # Make image grayscale

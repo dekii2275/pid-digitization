@@ -4,10 +4,8 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
 
 from dotenv import load_dotenv
-
 
 SRC_ROOT = Path(__file__).resolve().parents[2]
 APP_ROOT = SRC_ROOT / "app"

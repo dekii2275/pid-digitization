@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Tuple
 
-
 CLASS_NAMES: Tuple[str, ...] = (
     "Welded gate valve",
     "Plug valve",

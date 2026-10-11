@@ -34,7 +34,9 @@ def category_for_class(class_name: str) -> str:
     return "Other"
 
 
-def bbox_iou(first: tuple[float, float, float, float], second: tuple[float, float, float, float]) -> float:
+def bbox_iou(
+    first: tuple[float, float, float, float], second: tuple[float, float, float, float]
+) -> float:
     left, top = max(first[0], second[0]), max(first[1], second[1])
     right, bottom = min(first[2], second[2]), min(first[3], second[3])
     intersection = max(0.0, right - left) * max(0.0, bottom - top)
@@ -46,7 +48,9 @@ def bbox_iou(first: tuple[float, float, float, float], second: tuple[float, floa
     return intersection / union if union else 0.0
 
 
-def class_aware_nms(detections: Iterable[YoloDetection], iou_threshold: float) -> list[YoloDetection]:
+def class_aware_nms(
+    detections: Iterable[YoloDetection], iou_threshold: float
+) -> list[YoloDetection]:
     """Merge overlapping tile predictions without suppressing different classes."""
 
     grouped: dict[int, list[YoloDetection]] = defaultdict(list)
@@ -59,7 +63,9 @@ def class_aware_nms(detections: Iterable[YoloDetection], iou_threshold: float) -
         while remaining:
             best = remaining.pop(0)
             kept.append(best)
-            remaining = [item for item in remaining if bbox_iou(best.bbox, item.bbox) < iou_threshold]
+            remaining = [
+                item for item in remaining if bbox_iou(best.bbox, item.bbox) < iou_threshold
+            ]
     return sorted(kept, key=lambda item: item.confidence, reverse=True)
 
 
@@ -93,7 +99,9 @@ class YoloSymbolDetector:
         try:
             from ultralytics import YOLO
         except ImportError as exc:
-            raise RuntimeError("YOLO runtime is not installed. Install the ultralytics dependency.") from exc
+            raise RuntimeError(
+                "YOLO runtime is not installed. Install the ultralytics dependency."
+            ) from exc
         self._model = YOLO(str(self.weights_path))
         return self._model
 

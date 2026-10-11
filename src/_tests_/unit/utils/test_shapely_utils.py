@@ -1,13 +1,20 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 import os
-import unittest
 import sys
+import unittest
+
 import shapely
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 from app.models.bounding_box import BoundingBox
-from app.utils.shapely_utils import is_high_overlap, is_high_overlap_in_horizontal_region, is_high_overlap_in_vertical_region, horizontal_shape_padding, vertical_shape_padding
+from app.utils.shapely_utils import (
+    horizontal_shape_padding,
+    is_high_overlap,
+    is_high_overlap_in_horizontal_region,
+    is_high_overlap_in_vertical_region,
+    vertical_shape_padding,
+)
 
 
 class TestIsHighOverlap(unittest.TestCase):
@@ -142,7 +149,9 @@ class TestHorizontalShapePadding(unittest.TestCase):
         result = horizontal_shape_padding(bounding_box, 0.1)
 
         # assert
-        expect = shapely.Polygon([(-0.05, 0.0), (0.15, 0.0), (0.15, 0.1), (-0.05, 0.1), (-0.05, 0.0)])
+        expect = shapely.Polygon(
+            [(-0.05, 0.0), (0.15, 0.0), (0.15, 0.1), (-0.05, 0.1), (-0.05, 0.0)]
+        )
         self.assertTrue(expect, result)
 
 
@@ -155,5 +164,7 @@ class TestVerticalShapePadding(unittest.TestCase):
         result = vertical_shape_padding(bounding_box, 0.1)
 
         # assert
-        expect = shapely.Polygon([(0.0, -0.05), (0.1, -0.05), (0.1, 0.15), (0.0, 0.15), (0.0, -0.05)])
+        expect = shapely.Polygon(
+            [(0.0, -0.05), (0.1, -0.05), (0.1, 0.15), (0.0, 0.15), (0.0, -0.05)]
+        )
         self.assertTrue(expect, result)

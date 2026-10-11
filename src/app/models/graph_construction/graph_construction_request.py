@@ -1,14 +1,16 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 from typing import Optional
-from ..text_detection.text_detection_inference_response import TextDetectionInferenceResponse
+
 from ..bounding_box import BoundingBox
+from ..text_detection.text_detection_inference_response import TextDetectionInferenceResponse
 
 
 class GraphConstructionInferenceRequest(TextDetectionInferenceResponse):
     """
     This class represents the parameters used in the Hough Transform algorithm.
     """
+
     hough_threshold: Optional[int]
     hough_min_line_length: Optional[int]
     hough_max_line_gap: Optional[int]

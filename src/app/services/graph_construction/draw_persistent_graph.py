@@ -1,31 +1,35 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-import random
-import networkx as nx
 import io
+import random
+from typing import Optional
+
 import cv2
-import numpy as np
 import matplotlib
 import matplotlib.pyplot as plt
-from typing import Optional
-from app.models.image_details import ImageDetails
-from app.models.graph_construction.connected_symbols_item import ConnectedSymbolsItem
-from app.services.graph_construction.config.symbol_node_keys_config import SymbolNodeKeysConfig
+import networkx as nx
+import numpy as np
+
 from app.models.enums.flow_direction import FlowDirection
-from app.services.draw_elements import draw_annotation_on_image, draw_line
+from app.models.graph_construction.connected_symbols_item import ConnectedSymbolsItem
+from app.models.image_details import ImageDetails
 from app.models.line_detection.line_segment import LineSegment
-matplotlib.use('pdf')
+from app.services.draw_elements import draw_annotation_on_image, draw_line
+from app.services.graph_construction.config.symbol_node_keys_config import SymbolNodeKeysConfig
+
+matplotlib.use("pdf")
 
 
 def draw_persistent_graph_networkx(
-        assets: list[ConnectedSymbolsItem],
-        file_path: str,
-        symbol_label_prefixes_to_include: set[str]):
+    assets: list[ConnectedSymbolsItem], file_path: str, symbol_label_prefixes_to_include: set[str]
+):
     """
-        Shows the output graph
-        :param connectivites: Connectivities
+    Shows the output graph
+    :param connectivites: Connectivities
     """
-    symbol_label_prefixes_to_include = {prefix.lower() for prefix in symbol_label_prefixes_to_include}
+    symbol_label_prefixes_to_include = {
+        prefix.lower() for prefix in symbol_label_prefixes_to_include
+    }
     g = nx.DiGraph()
     # Only add assets to this graph view if they are in the set of symbol label prefixes to include
     for asset in assets:
@@ -38,18 +42,22 @@ def draw_persistent_graph_networkx(
     for asset in assets:
         if asset.label.lower().startswith(tuple(symbol_label_prefixes_to_include)):
             for connected_asset in asset.connections:
-                if connected_asset.label.lower().startswith(tuple(symbol_label_prefixes_to_include)) \
-                  and (connected_asset.flow_direction == FlowDirection.unknown or
-                       connected_asset.flow_direction == FlowDirection.downstream):
+                if connected_asset.label.lower().startswith(
+                    tuple(symbol_label_prefixes_to_include)
+                ) and (
+                    connected_asset.flow_direction == FlowDirection.unknown
+                    or connected_asset.flow_direction == FlowDirection.downstream
+                ):
                     g.add_edge(asset.id, connected_asset.id)
 
     # color map for nodes
     # current categories: Equipment, Valve, Connector, Indicator
     color_map = {
-        'Equipment/': 'blue',
-        'Instrument/Valve/': 'yellow',
-        'Piping/Endpoint/Pagination': 'green',
-        'Instrument/Indicator/': 'red'}
+        "Equipment/": "blue",
+        "Instrument/Valve/": "yellow",
+        "Piping/Endpoint/Pagination": "green",
+        "Instrument/Indicator/": "red",
+    }
     node_colors = []
 
     # dictionary of nodes and their text
@@ -70,19 +78,23 @@ def draw_persistent_graph_networkx(
                 break
 
         if not set_color:
-            node_colors.append('black')  # if symbol category is not in color map, set color to black
+            node_colors.append(
+                "black"
+            )  # if symbol category is not in color map, set color to black
 
     fig, ax = plt.subplots(1, 1, squeeze=True)
 
     pos = nx.spring_layout(g, k=3, iterations=50)
-    nx.draw_networkx(g,
-                     pos=pos,
-                     ax=ax,
-                     with_labels=True,
-                     labels=labels,
-                     node_color=node_colors,
-                     node_size=250,
-                     font_size=14,)
+    nx.draw_networkx(
+        g,
+        pos=pos,
+        ax=ax,
+        with_labels=True,
+        labels=labels,
+        node_color=node_colors,
+        node_size=250,
+        font_size=14,
+    )
 
     buf = io.BytesIO()
 
@@ -95,21 +107,22 @@ def draw_persistent_graph_networkx(
 
 
 def draw_persistent_graph_annotated(
-        assets: list[ConnectedSymbolsItem],
-        pid_image: bytes,
-        image_details: ImageDetails,
-        output_file_path: str,
-        detected_lines: Optional[list[LineSegment]] = None):
-    '''
-        Draws the computed graph connected on top of the input PID image.
-        :param assets: List of assets (result of graph construction step)
-        :param pid_image: PID image in bytes
-        :param image_details: Image details
-        :param output_file_path: Output file path
-        :param detected_lines: All input line segments. These are rendered as a
-            muted background layer so a reviewer can distinguish lines found by
-            the detector from the smaller set of lines used by topology paths.
-  '''
+    assets: list[ConnectedSymbolsItem],
+    pid_image: bytes,
+    image_details: ImageDetails,
+    output_file_path: str,
+    detected_lines: Optional[list[LineSegment]] = None,
+):
+    """
+    Draws the computed graph connected on top of the input PID image.
+    :param assets: List of assets (result of graph construction step)
+    :param pid_image: PID image in bytes
+    :param image_details: Image details
+    :param output_file_path: Output file path
+    :param detected_lines: All input line segments. These are rendered as a
+        muted background layer so a reviewer can distinguish lines found by
+        the detector from the smaller set of lines used by topology paths.
+    """
 
     img = cv2.imdecode(np.frombuffer(pid_image, np.uint8), cv2.IMREAD_COLOR)
 
@@ -120,46 +133,44 @@ def draw_persistent_graph_annotated(
     if detected_lines:
         line_layer = img.copy()
         for line_segment in detected_lines:
-            draw_line(line_layer,
-                      image_details,
-                      line_segment,
-                      (255, 200, 100))  # BGR: muted light blue
+            draw_line(
+                line_layer, image_details, line_segment, (255, 200, 100)
+            )  # BGR: muted light blue
         img = cv2.addWeighted(line_layer, 0.45, img, 0.55, 0)
 
     # All assets are included in this debug view - this can be tuned in the future
     for asset in assets:
         # Generate a random color for each asset and all its connected paths
-        color = (
-            random.randint(100, 255),
-            random.randint(100, 255),
-            random.randint(100, 255))
+        color = (random.randint(100, 255), random.randint(100, 255), random.randint(100, 255))
 
         # Draw asset bounding box - this will draw all recognized assets
-        draw_annotation_on_image(asset.id,
-                                 img,
-                                 image_details,
-                                 asset.bounding_box,
-                                 asset.text_associated,
-                                 None,
-                                 color,
-                                 color)
+        draw_annotation_on_image(
+            asset.id,
+            img,
+            image_details,
+            asset.bounding_box,
+            asset.text_associated,
+            None,
+            color,
+            color,
+        )
 
         # Draw lines for all the connections
         # Note that this doesn't show in the same color what assets are connected to each other,
         # but rather the line segments that were detected for each asset
         for connected_asset in asset.connections:
-
             for segment in connected_asset.segments:
-
                 # Draw a line on the image for each segment
                 # Note that this will render the non-terminal symbols that are part of a path
                 # as a diagonal line (from the top left to bottom right corner). This
                 # is intentional to disambiguate between the assets starting the path and the
                 # non-terminal symbols that are part of the path.
-                line_segment = LineSegment(startX=segment.bottomX, startY=segment.bottomY, endX=segment.topX, endY=segment.topY)
-                draw_line(img,
-                          image_details,
-                          line_segment,
-                          color)
+                line_segment = LineSegment(
+                    startX=segment.bottomX,
+                    startY=segment.bottomY,
+                    endX=segment.topX,
+                    endY=segment.topY,
+                )
+                draw_line(img, image_details, line_segment, color)
 
     cv2.imwrite(output_file_path, img)

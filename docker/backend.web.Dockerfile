@@ -16,6 +16,9 @@ COPY src/requirements.web.txt src/requirements.symbol-db.txt src/constraints.web
 RUN pip install --no-cache-dir -c /tmp/constraints.web.txt -r /tmp/requirements.web.txt -r /tmp/requirements.symbol-db.txt \
     && pip check
 
+COPY src/requirements.storage.txt /tmp/
+RUN pip install --no-cache-dir -c /tmp/constraints.web.txt -r /tmp/requirements.storage.txt && pip check
+
 COPY src ./src
 COPY training ./training
 COPY tests ./tests

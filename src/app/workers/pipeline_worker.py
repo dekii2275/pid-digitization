@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import threading
 import time
 from queue import Queue
@@ -28,6 +27,7 @@ class PipelineWorker:
         # Attempt to connect to Redis
         try:
             import redis
+
             self.redis_client = redis.Redis.from_url(self.redis_url)
             self.redis_client.ping()
             logger.info(f"PipelineWorker connected to Redis: {self.redis_url}")

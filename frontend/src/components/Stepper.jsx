@@ -36,16 +36,18 @@ export function Stepper({ activeStep, onStepChange, counts }) {
   ];
 
   return (
-    <div style={{
-      background: 'var(--bg-secondary)',
-      borderBottom: '1px solid var(--border-color)',
-      padding: '0.5rem 1.5rem',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: '0.75rem',
-      overflowX: 'auto',
-    }}>
+    <div
+      style={{
+        background: 'var(--bg-secondary)',
+        borderBottom: '1px solid var(--border-color)',
+        padding: '0.5rem 1.5rem',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '0.75rem',
+        overflowX: 'auto',
+      }}
+    >
       {steps.map((step) => {
         const Icon = step.icon;
         const isActive = activeStep === step.id;
@@ -71,38 +73,46 @@ export function Stepper({ activeStep, onStepChange, counts }) {
               boxShadow: isActive ? '0 4px 15px rgba(14, 165, 233, 0.15)' : 'none',
             }}
           >
-            <div style={{
-              width: '32px',
-              height: '32px',
-              borderRadius: '6px',
-              background: isActive ? 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))' : 'var(--bg-primary)',
-              color: isActive ? '#fff' : 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}>
+            <div
+              style={{
+                width: '32px',
+                height: '32px',
+                borderRadius: '6px',
+                background: isActive
+                  ? 'linear-gradient(135deg, var(--accent-cyan), var(--accent-blue))'
+                  : 'var(--bg-primary)',
+                color: isActive ? '#fff' : 'var(--text-muted)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+              }}
+            >
               <Icon size={18} />
             </div>
 
             <div style={{ overflow: 'hidden' }}>
-              <div style={{
-                fontSize: '0.85rem',
-                fontWeight: isActive ? '600' : '500',
-                color: isActive ? '#fff' : 'var(--text-primary)',
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
-                overflow: 'hidden',
-              }}>
+              <div
+                style={{
+                  fontSize: '0.85rem',
+                  fontWeight: isActive ? '600' : '500',
+                  color: isActive ? '#fff' : 'var(--text-primary)',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  overflow: 'hidden',
+                }}
+              >
                 {step.title}
               </div>
-              <div style={{
-                fontSize: '0.75rem',
-                color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
-                whiteSpace: 'nowrap',
-                textOverflow: 'ellipsis',
-                overflow: 'hidden',
-              }}>
+              <div
+                style={{
+                  fontSize: '0.75rem',
+                  color: isActive ? 'var(--accent-cyan)' : 'var(--text-muted)',
+                  whiteSpace: 'nowrap',
+                  textOverflow: 'ellipsis',
+                  overflow: 'hidden',
+                }}
+              >
                 {step.subtitle}
               </div>
             </div>

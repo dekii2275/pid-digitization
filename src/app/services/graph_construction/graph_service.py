@@ -1,20 +1,21 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import Union
+
 import cv2
 import networkx as nx
-from logger_config import get_logger
-from app.models.enums.graph_node_type import GraphNodeType
+import numpy as np
+
+from app.config import config
+from app.models.bounding_box import BoundingBox
 from app.models.enums.flow_direction import FlowDirection
-from app.services.graph_construction.config.symbol_node_keys_config import SymbolNodeKeysConfig
+from app.models.enums.graph_node_type import GraphNodeType
+from app.models.graph_construction.traversal_connection import TraversalConnection
 from app.models.image_details import ImageDetails
 from app.models.line_detection.line_segment import LineSegment
 from app.services.draw_elements import draw_annotation_on_image, draw_line
-from app.models.bounding_box import BoundingBox
-from app.config import config
-from app.models.graph_construction.traversal_connection import TraversalConnection
-import numpy as np
-from typing import Union
-
+from app.services.graph_construction.config.symbol_node_keys_config import SymbolNodeKeysConfig
+from logger_config import get_logger
 
 logger = get_logger(__name__)
 
@@ -24,7 +25,7 @@ class GraphService:
         self.G = G
 
     def add_node(self, node_id: str, node_type: GraphNodeType, **kwargs):
-        '''Adds a node to the graph
+        """Adds a node to the graph
 
         :param node_id: The id of the node
         :type node_id: str
@@ -32,10 +33,10 @@ class GraphService:
         :type node_type: GraphNodeType
         :param kwargs: The additional properties of the node
         :type kwargs: dict
-        '''
+        """
 
         if node_type == GraphNodeType.symbol and SymbolNodeKeysConfig.LABEL_KEY not in kwargs:
-            raise Exception('Symbol nodes must have a label')
+            raise Exception("Symbol nodes must have a label")
 
         # deleting the type key from the kwargs to not add duplicate type to node
         # duplicate type attribute will cause an error
@@ -47,41 +48,41 @@ class GraphService:
         self.G.add_node(node_id, type=node_type, **kwargs)
 
     def add_edge(self, node_id_1: str, node_id_2: str, **kwargs):
-        '''Adds an edge to the graph
+        """Adds an edge to the graph
 
         :param node_id_1: The id of the first node
         :type node_id_1: str
         :param node_id_2: The id of the second node
         :type node_id_2: str
-        '''
+        """
         self.G.add_edge(node_id_1, node_id_2, **kwargs)
 
     def get_node(self, node_id: str):
-        '''Gets the node from the graph
+        """Gets the node from the graph
 
         :param node_id: The id of the node
         :type node_id: str
         :return: The node
         :rtype: dict
-        '''
+        """
         return self.G.nodes[node_id]
 
     def get_degree(self, node_id: str):
-        '''Gets the degree of the node
+        """Gets the degree of the node
 
         :param node_id: The id of the node
         :type node_id: str
         :return: The degree of the node
         :rtype: int
-        '''
+        """
         return self.G.degree[node_id]
 
     def get_symbol_nodes(self):
-        '''Gets the symbol nodes from the graph
+        """Gets the symbol nodes from the graph
 
         :return: The symbol nodes
         :rtype: dict
-        '''
+        """
         nodes = []
         for node_id, node in self.G.nodes(data=True):
             if node[SymbolNodeKeysConfig.TYPE_KEY] == GraphNodeType.symbol:
@@ -89,23 +90,25 @@ class GraphService:
         return nodes
 
     def get_arrow_symbols_at_T_junction(self, arrow_symbol_label: str = config.arrow_symbol_label):
-        '''Gets the arrow symbols with high degree
+        """Gets the arrow symbols with high degree
 
         :param arrow_symbol_label: The label of the arrow symbol
         :type arrow_symbol_label: str
         :return: The arrow symbols with high degree
         :rtype: list
-        '''
+        """
         degree_criteria = 2
         nodes = self.G.nodes(data=True)
 
         # getting the arrows with a degree higher than the criteria
         arrow_symbols = [
-            node_id for node_id, node in nodes if (
-                node[SymbolNodeKeysConfig.TYPE_KEY] == GraphNodeType.symbol and
-                SymbolNodeKeysConfig.LABEL_KEY in node and
-                node[SymbolNodeKeysConfig.LABEL_KEY] == arrow_symbol_label and
-                self.get_degree(node_id) > degree_criteria
+            node_id
+            for node_id, node in nodes
+            if (
+                node[SymbolNodeKeysConfig.TYPE_KEY] == GraphNodeType.symbol
+                and SymbolNodeKeysConfig.LABEL_KEY in node
+                and node[SymbolNodeKeysConfig.LABEL_KEY] == arrow_symbol_label
+                and self.get_degree(node_id) > degree_criteria
             )
         ]
 
@@ -123,11 +126,11 @@ class GraphService:
         return high_degree_arrow_symbols
 
     def publish_sources(self, temp_sources_key: str):
-        '''Publishes the sources to the source key
+        """Publishes the sources to the source key
 
         :param temp_source_key: The temporary source key
         :type temp_source_key: str
-        '''
+        """
         untraceable_node_ids = self._get_untraceable_node_ids(temp_sources_key)
         for untraceable_node_id in untraceable_node_ids:
             node = self.get_node(untraceable_node_id)
@@ -141,11 +144,11 @@ class GraphService:
                 del node[temp_sources_key]
 
     def get_symbol_nodes_by_key(self, key: str, value: str):
-        '''Gets the symbol nodes from the graph that match the key criteria
+        """Gets the symbol nodes from the graph that match the key criteria
 
         :return: The symbol nodes
         :rtype: dict
-        '''
+        """
         nodes = []
         for node_id, node in self.G.nodes(data=True):
             if node[SymbolNodeKeysConfig.TYPE_KEY] == GraphNodeType.symbol and node[key] == value:
@@ -153,11 +156,11 @@ class GraphService:
         return nodes
 
     def get_neighbors(self, node_id: str):
-        '''Get the neighboring nodes (connected to the given node)
+        """Get the neighboring nodes (connected to the given node)
 
         :return: The edges
         :rtype: list
-        '''
+        """
         return list(self.G.neighbors(node_id))
 
     def get_connected_nodes(
@@ -167,9 +170,9 @@ class GraphService:
         exhaust_paths: bool = False,
         propagation_pass: bool = False,
         junction_arrow_ids: Union[set[str], None] = None,
-        arrow_symbol_label: str = config.arrow_symbol_label
+        arrow_symbol_label: str = config.arrow_symbol_label,
     ) -> list[TraversalConnection]:
-        '''Traverses the graph from the starting node
+        """Traverses the graph from the starting node
 
         :param starting_node: The id of the starting node
         :type starting_node: str
@@ -185,9 +188,11 @@ class GraphService:
         :type arrow_symbol_label: str
         :return: The list of connected objects with flow direction
         :rtype: list[TraversalConnection]
-        '''
+        """
         queue = []
-        queue.append(TraversalConnection(node_id=starting_node, flow_direction=FlowDirection.unknown))
+        queue.append(
+            TraversalConnection(node_id=starting_node, flow_direction=FlowDirection.unknown)
+        )
         visited = {starting_node}
         connected_objects = []
 
@@ -199,9 +204,11 @@ class GraphService:
 
             neighbors = list(self.G.neighbors(s))
             for neighbor in neighbors:
-                if (exhaust_paths and neighbor in current_visited_ids) or \
-                        (not exhaust_paths and neighbor in visited) or \
-                        neighbor == starting_node:
+                if (
+                    (exhaust_paths and neighbor in current_visited_ids)
+                    or (not exhaust_paths and neighbor in visited)
+                    or neighbor == starting_node
+                ):
                     continue
 
                 visited.add(neighbor)
@@ -212,35 +219,62 @@ class GraphService:
 
                 last_node = self.G.nodes[s]
                 # checking if flow direction is moving in the wrong direction (upstream)
-                if SymbolNodeKeysConfig.SOURCES_KEY in last_node and \
-                        neighbor in last_node[SymbolNodeKeysConfig.SOURCES_KEY]:
+                if (
+                    SymbolNodeKeysConfig.SOURCES_KEY in last_node
+                    and neighbor in last_node[SymbolNodeKeysConfig.SOURCES_KEY]
+                ):
                     continue
 
                 # checking if flow direction is moving in the right direction (downstream)
-                if SymbolNodeKeysConfig.SOURCES_KEY in node and s in node[SymbolNodeKeysConfig.SOURCES_KEY]:
+                if (
+                    SymbolNodeKeysConfig.SOURCES_KEY in node
+                    and s in node[SymbolNodeKeysConfig.SOURCES_KEY]
+                ):
                     new_flow_direction = FlowDirection.downstream
-                    if propagation_pass and SymbolNodeKeysConfig.LABEL_KEY in node and \
-                            node[SymbolNodeKeysConfig.LABEL_KEY] == arrow_symbol_label and \
-                            neighbor in junction_arrow_ids:
+                    if (
+                        propagation_pass
+                        and SymbolNodeKeysConfig.LABEL_KEY in node
+                        and node[SymbolNodeKeysConfig.LABEL_KEY] == arrow_symbol_label
+                        and neighbor in junction_arrow_ids
+                    ):
                         connected_objects.append(
-                            TraversalConnection(node_id=neighbor, flow_direction=new_flow_direction, visited_ids=new_visited_ids)
+                            TraversalConnection(
+                                node_id=neighbor,
+                                flow_direction=new_flow_direction,
+                                visited_ids=new_visited_ids,
+                            )
                         )
                         continue
 
                 # if the neighbor is an asset symbol, add it to the connected objects
-                if node[SymbolNodeKeysConfig.TYPE_KEY] == GraphNodeType.symbol and neighbor in asset_symbol_ids:
+                if (
+                    node[SymbolNodeKeysConfig.TYPE_KEY] == GraphNodeType.symbol
+                    and neighbor in asset_symbol_ids
+                ):
                     connected_objects.append(
-                        TraversalConnection(node_id=neighbor, flow_direction=new_flow_direction, visited_ids=new_visited_ids)
+                        TraversalConnection(
+                            node_id=neighbor,
+                            flow_direction=new_flow_direction,
+                            visited_ids=new_visited_ids,
+                        )
                     )
                     continue
 
                 new_visited_ids.append(neighbor)
-                queue.append(TraversalConnection(node_id=neighbor, flow_direction=new_flow_direction, visited_ids=new_visited_ids))
+                queue.append(
+                    TraversalConnection(
+                        node_id=neighbor,
+                        flow_direction=new_flow_direction,
+                        visited_ids=new_visited_ids,
+                    )
+                )
 
         return connected_objects
 
-    def propagate_flow_direction(self, symbol_node_id: str, traversal_connections: list[TraversalConnection], key: str):
-        '''Propagates the flow direction to the connected symbols
+    def propagate_flow_direction(
+        self, symbol_node_id: str, traversal_connections: list[TraversalConnection], key: str
+    ):
+        """Propagates the flow direction to the connected symbols
 
         :param symbol_node_id: The id of the symbol
         :type symbol_node_id: str
@@ -248,7 +282,7 @@ class GraphService:
         :type traversal_connections: list[TraversalConnection]
         :param key: The key to use for the source lines
         :type key: str
-        '''
+        """
         for connected_node in traversal_connections:
             # init the key for all the seen nodes
             for visited in connected_node.visited_ids:
@@ -281,42 +315,46 @@ class GraphService:
 
         for node in self.G.nodes(data=True):
             node_info = node[1]
-            node_type = node_info['type']
+            node_type = node_info["type"]
 
             color = (0, 155, 0)
 
             if node_type == GraphNodeType.symbol:
-                draw_annotation_on_image(node_info['id'],
-                                         img,
-                                         image_details,
-                                         BoundingBox(
-                                              topX=node_info['topX'],
-                                              bottomX=node_info['bottomX'],
-                                              topY=node_info['topY'],
-                                              bottomY=node_info['bottomY'],
-                                         ),
-                                         node_info['text_associated'],
-                                         None,
-                                         color,
-                                         color)
+                draw_annotation_on_image(
+                    node_info["id"],
+                    img,
+                    image_details,
+                    BoundingBox(
+                        topX=node_info["topX"],
+                        bottomX=node_info["bottomX"],
+                        topY=node_info["topY"],
+                        bottomY=node_info["bottomY"],
+                    ),
+                    node_info["text_associated"],
+                    None,
+                    color,
+                    color,
+                )
             else:
                 draw_line(
                     img,
                     image_details,
                     LineSegment(
-                        startX=node_info['startX'],
-                        endX=node_info['endX'],
-                        startY=node_info['startY'],
-                        endY=node_info['endY']),
-                    color)
+                        startX=node_info["startX"],
+                        endX=node_info["endX"],
+                        startY=node_info["startY"],
+                        endY=node_info["endY"],
+                    ),
+                    color,
+                )
 
         cv2.imwrite(file_path, img)
 
     def _get_untraceable_node_ids(self, source_key: str):
-        '''Gets the untraceable nodes from the graph
+        """Gets the untraceable nodes from the graph
 
         :param source_key: The source key to check for
-        :type source_key: str'''
+        :type source_key: str"""
 
         node_ids: list[str] = []
         for node_id, node in self.G.nodes(data=True):
@@ -331,10 +369,14 @@ class GraphService:
 
             for source in sources:
                 source_node = self.get_node(source)
-                if source_key not in source_node:  # not blocking since the node is not in the source
+                if (
+                    source_key not in source_node
+                ):  # not blocking since the node is not in the source
                     blocking = False
                     break
-                if node_id not in source_node[source_key]:  # not blocking since the node is not in the source
+                if (
+                    node_id not in source_node[source_key]
+                ):  # not blocking since the node is not in the source
                     blocking = False
                     break
             if blocking:

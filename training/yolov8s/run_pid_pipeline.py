@@ -19,7 +19,6 @@ import sys
 from pathlib import Path
 from typing import Sequence
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 REPOSITORY_ROOT = SCRIPT_DIR.parents[1]
 DEFAULT_WEIGHTS = REPOSITORY_ROOT / "models" / "symbol-detector" / "best.pt"
@@ -71,14 +70,18 @@ def main(argv: Sequence[str] | None = None) -> int:
             "for a selected PDF page and pass that rendered page image to the adapter."
         )
 
-    output_dir = (args.output_dir or REPOSITORY_ROOT / "artifacts" / "pid-pipeline" / source.stem).resolve()
+    output_dir = (
+        args.output_dir or REPOSITORY_ROOT / "artifacts" / "pid-pipeline" / source.stem
+    ).resolve()
     symbols_dir = output_dir / "symbols"
     texts_dir = output_dir / "ocr"
     lines_dir = output_dir / "lines"
     topology_dir = output_dir / "topology"
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    symbols_json = args.symbols_json.resolve() if args.symbols_json else symbols_dir / "detections.json"
+    symbols_json = (
+        args.symbols_json.resolve() if args.symbols_json else symbols_dir / "detections.json"
+    )
     texts_json = args.texts_json.resolve() if args.texts_json else texts_dir / "ocr.json"
     lines_json = args.lines_json.resolve() if args.lines_json else lines_dir / "lines.json"
 

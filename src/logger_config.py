@@ -1,8 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 import logging
-import ecs_logging
 import sys
+
+import ecs_logging
 
 from app.config import config
 
@@ -21,5 +22,5 @@ def get_logger(logger_name) -> logging.Logger:
         handler.setFormatter(ecs_logging.StdlibFormatter())
         logger.addHandler(handler)
     else:
-        logging.basicConfig(format='[ %(asctime)s loglevel=%(levelname)-6s] %(message)s')
+        logging.basicConfig(format="[ %(asctime)s loglevel=%(levelname)-6s] %(message)s")
     return logger

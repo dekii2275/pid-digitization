@@ -6,7 +6,6 @@ import argparse
 from pathlib import Path
 from typing import Sequence
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT_DIR = REPOSITORY_ROOT / "artifacts" / "predictions"
 

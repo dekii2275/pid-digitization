@@ -3,7 +3,13 @@ import { Upload, Play, Sliders } from 'lucide-react';
 import { api } from '../services/api';
 import { DrawingViewer } from './DrawingViewer';
 
-export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStarted, isProcessing, progressInfo }) {
+export function Step1Input({
+  currentDrawing,
+  onDrawingCreated,
+  onProcessingStarted,
+  isProcessing,
+  progressInfo,
+}) {
   const [file, setFile] = useState(null);
   const [drawingName, setDrawingName] = useState('');
   const [isUploading, setIsUploading] = useState(false);
@@ -56,18 +62,37 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '420px 1fr', gap: '1.25rem', height: 'calc(100vh - 125px)' }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '420px 1fr',
+        gap: '1.25rem',
+        height: 'calc(100vh - 125px)',
+      }}
+    >
       {/* Left Column: Upload & Configuration Panel */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', overflowY: 'auto' }}>
         {/* Upload Card */}
         <div className="card">
-          <h2 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2
+            style={{
+              fontSize: '1rem',
+              fontWeight: '600',
+              marginBottom: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
             <Upload size={18} color="var(--accent-cyan)" />
             Tải lên Bản vẽ P&ID / PFD
           </h2>
 
           <div
-            onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragOver(true);
+            }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
             style={{
@@ -88,17 +113,19 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
               onChange={handleFileChange}
               style={{ display: 'none' }}
             />
-            <div style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              background: 'rgba(56, 189, 248, 0.1)',
-              color: 'var(--accent-cyan)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              margin: '0 auto 0.75rem',
-            }}>
+            <div
+              style={{
+                width: '44px',
+                height: '44px',
+                borderRadius: '50%',
+                background: 'rgba(56, 189, 248, 0.1)',
+                color: 'var(--accent-cyan)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.75rem',
+              }}
+            >
               <Upload size={22} />
             </div>
             <p style={{ fontSize: '0.875rem', fontWeight: '500', color: '#fff' }}>
@@ -110,7 +137,14 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
           </div>
 
           <div style={{ marginTop: '0.75rem' }}>
-            <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>
+            <label
+              style={{
+                fontSize: '0.75rem',
+                color: 'var(--text-secondary)',
+                display: 'block',
+                marginBottom: '0.25rem',
+              }}
+            >
               Tên bản vẽ:
             </label>
             <input
@@ -134,14 +168,25 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
 
         {/* Pipeline Parameters Card */}
         <div className="card">
-          <h2 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2
+            style={{
+              fontSize: '1rem',
+              fontWeight: '600',
+              marginBottom: '0.75rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
             <Sliders size={18} color="var(--accent-blue)" />
             Cấu hình Tham số Pipeline
           </h2>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>DPI Render (PDF):</label>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                DPI Render (PDF):
+              </label>
               <select
                 value={dpi}
                 onChange={(e) => setDpi(parseInt(e.target.value))}
@@ -162,7 +207,9 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
             </div>
 
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>YOLO Conf: {conf}</label>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                YOLO Conf: {conf}
+              </label>
               <input
                 type="range"
                 min="0.05"
@@ -175,7 +222,9 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
             </div>
 
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Tile Size (YOLO):</label>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Tile Size (YOLO):
+              </label>
               <select
                 value={tileSize}
                 onChange={(e) => setTileSize(parseInt(e.target.value))}
@@ -196,7 +245,9 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
             </div>
 
             <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Thiết bị tính toán:</label>
+              <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                Thiết bị tính toán:
+              </label>
               <select
                 value={device}
                 onChange={(e) => setDevice(e.target.value)}
@@ -233,7 +284,9 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
         {/* Realtime Progress Card (SSE) */}
         {isProcessing && (
           <div className="card" style={{ borderColor: 'var(--accent-cyan)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+            <div
+              style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}
+            >
               <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--accent-cyan)' }}>
                 {progressInfo?.stage || 'Đang xử lý...'}
               </span>
@@ -243,23 +296,29 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
             </div>
 
             {/* Progress bar */}
-            <div style={{
-              width: '100%',
-              height: '8px',
-              borderRadius: '4px',
-              background: 'var(--bg-primary)',
-              overflow: 'hidden',
-            }}>
-              <div style={{
-                width: `${progressInfo?.progress || 5}%`,
-                height: '100%',
-                background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-blue))',
+            <div
+              style={{
+                width: '100%',
+                height: '8px',
                 borderRadius: '4px',
-                transition: 'width 0.4s ease',
-              }} />
+                background: 'var(--bg-primary)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                style={{
+                  width: `${progressInfo?.progress || 5}%`,
+                  height: '100%',
+                  background: 'linear-gradient(90deg, var(--accent-cyan), var(--accent-blue))',
+                  borderRadius: '4px',
+                  transition: 'width 0.4s ease',
+                }}
+              />
             </div>
 
-            <div style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+            <div
+              style={{ marginTop: '0.75rem', fontSize: '0.75rem', color: 'var(--text-secondary)' }}
+            >
               Job ID: <code style={{ color: 'var(--accent-cyan)' }}>{progressInfo?.job_id}</code>
             </div>
           </div>
@@ -268,17 +327,22 @@ export function Step1Input({ currentDrawing, onDrawingCreated, onProcessingStart
 
       {/* Right Column: Original Drawing Viewer */}
       <div className="card" style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column' }}>
-        <div style={{
-          padding: '0.5rem 0.75rem',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}>
+        <div
+          style={{
+            padding: '0.5rem 0.75rem',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
           <span style={{ fontSize: '0.85rem', fontWeight: '600', color: 'var(--text-primary)' }}>
             Xem trước Bản vẽ gốc ({currentDrawing?.width || 0} x {currentDrawing?.height || 0} px)
           </span>
-          <span className="badge" style={{ background: 'rgba(56, 189, 248, 0.1)', color: 'var(--accent-cyan)' }}>
+          <span
+            className="badge"
+            style={{ background: 'rgba(56, 189, 248, 0.1)', color: 'var(--accent-cyan)' }}
+          >
             Trạng thái: {currentDrawing?.status || 'Chưa chọn'}
           </span>
         </div>

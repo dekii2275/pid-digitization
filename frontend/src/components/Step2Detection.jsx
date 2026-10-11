@@ -64,19 +64,28 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: '1.25rem', height: 'calc(100vh - 125px)' }}>
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 340px',
+        gap: '1.25rem',
+        height: 'calc(100vh - 125px)',
+      }}
+    >
       {/* Left: Drawing Canvas with 5-color detection overlay */}
       <div className="card" style={{ padding: '0.5rem', display: 'flex', flexDirection: 'column' }}>
         {/* Top Filter Bar */}
-        <div style={{
-          padding: '0.5rem 0.75rem',
-          borderBottom: '1px solid var(--border-color)',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          flexWrap: 'wrap',
-          gap: '0.75rem',
-        }}>
+        <div
+          style={{
+            padding: '0.5rem 0.75rem',
+            borderBottom: '1px solid var(--border-color)',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '0.75rem',
+          }}
+        >
           {/* 5-Color Legend Checkboxes */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             {categoryConfigs.map((cfg) => {
@@ -101,14 +110,23 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
                     transition: 'all 0.15s ease',
                   }}
                 >
-                  <span style={{
-                    width: '10px',
-                    height: '10px',
-                    borderRadius: '2px',
-                    background: cfg.color,
-                  }} />
+                  <span
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '2px',
+                      background: cfg.color,
+                    }}
+                  />
                   <span style={{ fontWeight: '500' }}>{cfg.label.split(' ')[0]}</span>
-                  <span className="badge" style={{ background: `${cfg.color}25`, color: cfg.color, padding: '0.1rem 0.35rem' }}>
+                  <span
+                    className="badge"
+                    style={{
+                      background: `${cfg.color}25`,
+                      color: cfg.color,
+                      padding: '0.1rem 0.35rem',
+                    }}
+                  >
                     {count}
                   </span>
                 </button>
@@ -144,7 +162,16 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
             showLines={false}
             visibleCategories={visibleCategories}
             minConfidence={minConf}
-            highlightedBox={selectedSymbol ? [selectedSymbol.bbox_x1, selectedSymbol.bbox_y1, selectedSymbol.bbox_x2, selectedSymbol.bbox_y2] : null}
+            highlightedBox={
+              selectedSymbol
+                ? [
+                    selectedSymbol.bbox_x1,
+                    selectedSymbol.bbox_y1,
+                    selectedSymbol.bbox_x2,
+                    selectedSymbol.bbox_y2,
+                  ]
+                : null
+            }
             onSelectSymbol={handleSelectSymbol}
           />
         </div>
@@ -153,7 +180,16 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
       {/* Right: Selected Symbol Inspector & Editor */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
         <div className="card" style={{ height: '100%', overflowY: 'auto' }}>
-          <h2 style={{ fontSize: '1rem', fontWeight: '600', marginBottom: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          <h2
+            style={{
+              fontSize: '1rem',
+              fontWeight: '600',
+              marginBottom: '1rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+            }}
+          >
             <Tag size={18} color="var(--accent-cyan)" />
             Chi tiết Đối tượng (Inspector)
           </h2>
@@ -161,50 +197,82 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
           {selectedSymbol ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Loại thiết bị (Class):</label>
-                <div style={{ fontSize: '0.9rem', fontWeight: '600', color: '#fff', marginTop: '0.2rem' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Loại thiết bị (Class):
+                </label>
+                <div
+                  style={{
+                    fontSize: '0.9rem',
+                    fontWeight: '600',
+                    color: '#fff',
+                    marginTop: '0.2rem',
+                  }}
+                >
                   {selectedSymbol.class_name}
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Nhóm phân loại (Category):</label>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Nhóm phân loại (Category):
+                </label>
                 <div style={{ marginTop: '0.2rem' }}>
-                  <span className="badge" style={{
-                    background: `${categoryConfigs.find(c => c.key === selectedSymbol.category)?.color || '#94a3b8'}20`,
-                    color: categoryConfigs.find(c => c.key === selectedSymbol.category)?.color || '#fff',
-                    border: `1px solid ${categoryConfigs.find(c => c.key === selectedSymbol.category)?.color || '#94a3b8'}`,
-                  }}>
+                  <span
+                    className="badge"
+                    style={{
+                      background: `${categoryConfigs.find((c) => c.key === selectedSymbol.category)?.color || '#94a3b8'}20`,
+                      color:
+                        categoryConfigs.find((c) => c.key === selectedSymbol.category)?.color ||
+                        '#fff',
+                      border: `1px solid ${categoryConfigs.find((c) => c.key === selectedSymbol.category)?.color || '#94a3b8'}`,
+                    }}
+                  >
                     {selectedSymbol.category}
                   </span>
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Độ tin cậy (Confidence):</label>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.2rem' }}>
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Độ tin cậy (Confidence):
+                </label>
+                <div
+                  style={{ fontSize: '0.85rem', color: 'var(--text-primary)', marginTop: '0.2rem' }}
+                >
                   {(selectedSymbol.confidence * 100).toFixed(1)}%
                 </div>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>Tọa độ Bounding Box [x1, y1, x2, y2]:</label>
-                <div style={{
-                  fontSize: '0.75rem',
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--accent-cyan)',
-                  background: 'var(--bg-primary)',
-                  padding: '0.4rem 0.6rem',
-                  borderRadius: '6px',
-                  marginTop: '0.2rem',
-                }}>
-                  [{Math.round(selectedSymbol.bbox_x1)}, {Math.round(selectedSymbol.bbox_y1)}, {Math.round(selectedSymbol.bbox_x2)}, {Math.round(selectedSymbol.bbox_y2)}]
+                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                  Tọa độ Bounding Box [x1, y1, x2, y2]:
+                </label>
+                <div
+                  style={{
+                    fontSize: '0.75rem',
+                    fontFamily: 'var(--font-mono)',
+                    color: 'var(--accent-cyan)',
+                    background: 'var(--bg-primary)',
+                    padding: '0.4rem 0.6rem',
+                    borderRadius: '6px',
+                    marginTop: '0.2rem',
+                  }}
+                >
+                  [{Math.round(selectedSymbol.bbox_x1)}, {Math.round(selectedSymbol.bbox_y1)},{' '}
+                  {Math.round(selectedSymbol.bbox_x2)}, {Math.round(selectedSymbol.bbox_y2)}]
                 </div>
               </div>
 
               {/* Tag Editing (Human-in-the-loop) */}
               <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
-                <label style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.25rem' }}>
+                <label
+                  style={{
+                    fontSize: '0.75rem',
+                    color: 'var(--text-secondary)',
+                    display: 'block',
+                    marginBottom: '0.25rem',
+                  }}
+                >
                   Gán Nhãn / Tag Kỹ thuật:
                 </label>
                 <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -234,7 +302,11 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
               <div style={{ marginTop: '1rem' }}>
                 <button
                   className="btn btn-secondary btn-sm"
-                  style={{ width: '100%', borderColor: 'rgba(239, 68, 68, 0.4)', color: 'var(--accent-red)' }}
+                  style={{
+                    width: '100%',
+                    borderColor: 'rgba(239, 68, 68, 0.4)',
+                    color: 'var(--accent-red)',
+                  }}
                   onClick={handleDeleteSymbol}
                 >
                   <Trash2 size={15} /> Xóa Symbol này
@@ -242,7 +314,14 @@ export function Step2Detection({ currentDrawing, symbols = [], onSymbolsUpdated 
               </div>
             </div>
           ) : (
-            <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', marginTop: '3rem' }}>
+            <div
+              style={{
+                color: 'var(--text-muted)',
+                fontSize: '0.85rem',
+                textAlign: 'center',
+                marginTop: '3rem',
+              }}
+            >
               Nhấp vào một symbol trên bản vẽ để xem thông tin chi tiết và chỉnh sửa nhãn.
             </div>
           )}

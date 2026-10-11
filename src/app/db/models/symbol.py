@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Float, DateTime, ForeignKey
+
+from sqlalchemy import Column, DateTime, Float, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -13,8 +14,12 @@ class DetectedSymbol(Base):
     __tablename__ = "symbols"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    drawing_id = Column(Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True)
-    page_id = Column(Integer, ForeignKey("drawing_pages.id", ondelete="SET NULL"), nullable=True, index=True)
+    drawing_id = Column(
+        Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    page_id = Column(
+        Integer, ForeignKey("drawing_pages.id", ondelete="SET NULL"), nullable=True, index=True
+    )
 
     class_name = Column(String(255), nullable=False, index=True)
     category = Column(String(50), nullable=False, default="Other", index=True)

@@ -2,15 +2,15 @@
 
 from fastapi import APIRouter
 
-from app.api.v1.projects import router as projects_router
 from app.api.v1.drawings import router as drawings_router
-from app.api.v1.processing import router as processing_router
-from app.api.v1.symbols import router as symbols_router
-from app.api.v1.ocr import router as ocr_router
-from app.api.v1.lines import router as lines_router
-from app.api.v1.topology import router as topology_router
-from app.api.v1.search import router as search_router
 from app.api.v1.exports import router as exports_router
+from app.api.v1.lines import router as lines_router
+from app.api.v1.ocr import router as ocr_router
+from app.api.v1.processing import router as processing_router
+from app.api.v1.projects import router as projects_router
+from app.api.v1.search import router as search_router
+from app.api.v1.symbols import router as symbols_router
+from app.api.v1.topology import router as topology_router
 
 api_v1_router = APIRouter(prefix="/api/v1")
 

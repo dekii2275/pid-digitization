@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Check,
+  CheckCircle2,
   Download,
+  FolderOpen,
   Hand,
   Maximize2,
   MousePointer2,
@@ -14,16 +17,17 @@ import {
   Type,
   Undo2,
   Upload,
+  X,
   ZoomIn,
   ZoomOut,
 } from 'lucide-react';
 import TiledDrawingCanvas from './TiledDrawingCanvas';
 import SymbolPreview from './SymbolPreview';
+import ExistingDrawingPicker from './ExistingDrawingPicker';
 import { getSymbolLibrary } from '../services/symbolLibrary';
 import {
   exportDataset,
   getAnnotations,
-  getDocument,
   getDocumentPage,
   getDocuments,
   saveAnnotations,
@@ -57,72 +61,91 @@ const writeLocal = (key, value) => {
 function DocumentPicker({ drawing, documents, onChoose, onUpload, isUploading }) {
   return (
     <section className="annotation-document">
-      <h3>Bản vẽ gán nhãn</h3>
-      <label className="annotation-upload">
-        <Upload size={15} /> {isUploading ? 'Đang tải…' : 'Tải ảnh / PDF'}
-        <input
-          aria-label="Tải bản vẽ gán nhãn"
-          type="file"
-          accept=".png,.jpg,.jpeg,.pdf"
-          disabled={isUploading}
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) onUpload(file);
-            event.target.value = '';
-          }}
-        />
-      </label>
-      <label className="annotation-field">
-        <span>Bản vẽ đã tải</span>
-        <select
-          aria-label="Bản vẽ đã tải"
-          value={drawing?.id || ''}
-          disabled={isUploading}
-          onChange={(event) => {
-            if (event.target.value) onChoose(event.target.value, 1);
-          }}
-        >
-          <option value="">Chọn bản vẽ</option>
-          {documents.map((item) => (
-            <option key={item.id} value={item.id}>
-              {item.name}
-            </option>
-          ))}
-        </select>
-      </label>
+      <h3>Bản vẽ hiện tại</h3>
+      <strong className="annotation-document-name" title={drawing?.name}>
+        {drawing?.name || 'Chưa chọn bản vẽ'}
+      </strong>
       {drawing && (
-        <>
+        <div className="annotation-document-page">
           <label className="annotation-field">
-            <span>Trang PDF / ảnh</span>
+            <span>Trang đang gán nhãn</span>
             <select
               aria-label="Trang PDF / ảnh"
               value={drawing.page_number || 1}
+              disabled={isUploading}
               onChange={(event) => onChoose(drawing.id, Number(event.target.value))}
             >
               {Array.from({ length: drawing.page_count }, (_, index) => (
                 <option key={index + 1} value={index + 1}>
-                  Trang {index + 1}
+                  Trang {index + 1} / {drawing.page_count}
                 </option>
               ))}
             </select>
           </label>
-          <small>
-            {drawing.width} × {drawing.height} px · trang {drawing.page_number || 1}/
-            {drawing.page_count}
-          </small>
-        </>
+        </div>
       )}
+      <details className="annotation-document-options" open={!drawing}>
+        <summary>Đổi nhanh / tải bản vẽ mới</summary>
+        <label className="annotation-field">
+          <span>Bản vẽ có sẵn</span>
+          <select
+            aria-label="Bản vẽ đã tải"
+            value={drawing?.id || ''}
+            disabled={isUploading}
+            onChange={(event) => {
+              if (event.target.value) onChoose(event.target.value, 1);
+            }}
+          >
+            <option value="">Chọn bản vẽ</option>
+            {documents.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="annotation-upload">
+          <Upload size={15} /> {isUploading ? 'Đang chuẩn bị ảnh…' : 'Tải ảnh / PDF mới'}
+          <input
+            aria-label="Tải bản vẽ gán nhãn"
+            type="file"
+            accept=".png,.jpg,.jpeg,.pdf"
+            disabled={isUploading}
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onUpload(file);
+              event.target.value = '';
+            }}
+          />
+        </label>
+        {drawing && (
+          <small>
+            {drawing.width} × {drawing.height} px
+            {drawing.source_type === 'pdf' && ` · ${drawing.render_dpi || 144} DPI`}
+          </small>
+        )}
+      </details>
     </section>
   );
 }
 
-function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload, isUploading }) {
+function AnnotationPage({
+  drawing,
+  mode,
+  catalog,
+  documents,
+  onChoose,
+  onUpload,
+  isUploading,
+  hidden,
+}) {
   const [data, setData] = useState(null);
   const dataRef = useRef(null);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
+  const [saveNotice, setSaveNotice] = useState(null);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState('All');
   const [labelCode, setLabelCode] = useState('');
@@ -145,7 +168,7 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
   };
 
   useEffect(() => {
-    if (!drawing) return undefined;
+    if (!drawing || hidden) return undefined;
     let cancelled = false;
     getAnnotations(drawing.id, page)
       .then((saved) => {
@@ -170,10 +193,15 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
     return () => {
       cancelled = true;
     };
-  }, [drawing, page]);
+  }, [drawing, page, hidden]);
   useEffect(() => {
     if (data && drawing) writeLocal(draftKey(drawing), { data, dirty });
   }, [data, dirty, drawing]);
+  useEffect(() => {
+    if (!saveNotice || hidden) return undefined;
+    const timer = window.setTimeout(() => setSaveNotice(null), 5000);
+    return () => window.clearTimeout(timer);
+  }, [saveNotice, hidden]);
   useEffect(() => {
     const warn = (event) => {
       if (dirty) {
@@ -271,7 +299,7 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
       ],
     }));
     setSelection({ kind, id });
-    if (kind === 'text') setTool('select');
+    setTool('select');
   };
   const remove = () => {
     if (!selected) return;
@@ -295,12 +323,18 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
     if (!dataRef.current || busy) return;
     setBusy(true);
     setError('');
+    setSaveNotice(null);
     try {
       const saved = await saveAnnotations(drawing.id, page, dataRef.current);
       adopt(saved);
       setDirty(false);
       writeLocal(draftKey(drawing), { data: saved, dirty: false });
-      setMessage('Đã lưu dữ liệu gán nhãn trên máy chủ.');
+      setSaveNotice({
+        savedAt: saved.saved_at,
+        symbols: saved.symbols.length,
+        texts: saved.texts.length,
+        relations: saved.relations.length,
+      });
       if (download) await exportDataset(drawing.id, page);
     } catch (cause) {
       setError(cause.message);
@@ -385,11 +419,12 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
     <div
       className="annotation-workspace"
       onKeyDown={(event) => {
-        if (event.target.closest('input,textarea,select')) return;
         if (event.key === 'Escape') {
           chooseTool('select');
           setSelection(null);
+          return;
         }
+        if (event.target.closest('input,textarea,select')) return;
         if (event.key === 'Delete' && selected) {
           event.preventDefault();
           remove();
@@ -410,8 +445,35 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
         />
         {mode === 'symbol' && (
           <section className="annotation-library">
-            <h3>Nhãn symbol</h3>
-            <p>Chọn nhãn, sau đó khoanh đúng vùng symbol trên ảnh.</p>
+            <div className="annotation-section-heading">
+              <h3>Thư viện nhãn symbol</h3>
+              <span>{classes.filter((item) => enabled.has(item.code)).length} nhãn</span>
+            </div>
+            {symbolPreview ? (
+              <div
+                className="annotation-active-label"
+                title={`${symbolPreview.code} · ${symbolPreview.name}`}
+              >
+                <span className="annotation-label-preview">
+                  <SymbolPreview symbol={symbolPreview} compact />
+                </span>
+                <span>
+                  <small>Nhãn đang dùng</small>
+                  <b>{symbolPreview.code}</b>
+                  <span className="annotation-label-name">{symbolPreview.name}</span>
+                </span>
+                <CheckCircle2 size={17} />
+              </div>
+            ) : (
+              <p className="annotation-library-hint">Chọn một nhãn bên dưới để bắt đầu.</p>
+            )}
+            {symbolPreview && (
+              <p className="annotation-library-hint">
+                {currentTool === 'draw'
+                  ? 'Kéo trên bản vẽ để khoanh symbol theo nhãn này.'
+                  : 'Bấm Khoanh vùng để thêm symbol theo nhãn này.'}
+              </p>
+            )}
             <label className="annotation-search">
               <Search size={14} />
               <input
@@ -431,36 +493,32 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
                 <option key={item}>{item}</option>
               ))}
             </select>
-            <div className="annotation-label-list">
+            <div className="annotation-library-count">{library.length} nhãn phù hợp</div>
+            <div className="annotation-label-list" aria-label="Danh sách nhãn symbol">
               {library.map((item) => (
                 <button
                   type="button"
                   key={item.code}
                   aria-pressed={item.code === labelCode}
+                  title={`${item.code} · ${item.name}`}
                   disabled={busy}
                   onClick={() => {
                     setLabelCode(item.code);
                     chooseTool('draw');
                   }}
                 >
-                  <SymbolPreview symbol={enabled.get(item.code)} compact />
+                  <span className="annotation-label-preview">
+                    <SymbolPreview symbol={enabled.get(item.code)} compact />
+                  </span>
                   <span>
                     <b>{item.code}</b>
                     <small>{item.name}</small>
                   </span>
+                  {item.code === labelCode && <Check size={16} />}
                 </button>
               ))}
               {drawing && !library.length && <p>Không có nhãn phù hợp.</p>}
             </div>
-            {symbolPreview && (
-              <div className="annotation-active-label">
-                <SymbolPreview symbol={symbolPreview} />
-                <span>
-                  <b>{symbolPreview.code}</b>
-                  <small>Nhãn đang dùng để khoanh</small>
-                </span>
-              </div>
-            )}
           </section>
         )}
         {mode === 'text' && (
@@ -531,82 +589,11 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
             </form>
           </section>
         )}
-        {selected && (
-          <section className="annotation-section annotation-properties">
-            <h3>
-              Thông tin vùng chọn{' '}
-              <button type="button" title="Xóa vùng gán nhãn" disabled={busy} onClick={remove}>
-                <Trash2 size={14} />
-              </button>
-            </h3>
-            {selection.kind === 'symbol' && (
-              <label className="annotation-field">
-                <span>Nhãn của vùng chọn</span>
-                <select
-                  aria-label="Nhãn của vùng chọn"
-                  value={selected.label_id}
-                  disabled={busy}
-                  onChange={(event) =>
-                    update('symbol', selected.id, { label_id: event.target.value })
-                  }
-                >
-                  {classes.map((item) => (
-                    <option key={item.code} value={item.code}>
-                      {item.code} · {item.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            )}
-            {selection.kind === 'text' && (
-              <label className="annotation-field">
-                <span>Nội dung OCR</span>
-                <textarea
-                  aria-label="Nội dung OCR"
-                  value={selected.text}
-                  disabled={busy}
-                  onChange={(event) => update('text', selected.id, { text: event.target.value })}
-                />
-              </label>
-            )}
-            {selection.kind !== 'relation' && (
-              <div className="annotation-coordinates">
-                {['x', 'y', 'width', 'height'].map((field) => (
-                  <label key={field}>
-                    <span>
-                      {field === 'width'
-                        ? 'Rộng'
-                        : field === 'height'
-                          ? 'Cao'
-                          : field.toUpperCase()}{' '}
-                      (px)
-                    </span>
-                    <input
-                      type="number"
-                      min={field === 'x' || field === 'y' ? 0 : 1}
-                      step="0.1"
-                      value={Math.round(selected[field] * 10) / 10}
-                      disabled={busy}
-                      onChange={(event) =>
-                        update(selection.kind, selected.id, { [field]: Number(event.target.value) })
-                      }
-                    />
-                  </label>
-                ))}
-              </div>
-            )}
-            {selection.kind === 'relation' && (
-              <p>
-                {nodes.find((item) => item.id === selected.source)?.label_id ||
-                  nodes.find((item) => item.id === selected.source)?.text}{' '}
-                → {nodes.find((item) => item.id === selected.target)?.label_id} · {selected.type}
-              </p>
-            )}
-          </section>
-        )}
         {data && (
-          <section className="annotation-section">
-            <h3>Đã gán nhãn ({data[collections[mode]].length})</h3>
+          <details className="annotation-section annotation-assigned">
+            <summary>
+              Vùng đã gán nhãn <span>{data[collections[mode]].length}</span>
+            </summary>
             <div className="annotation-item-list">
               {data[collections[mode]].map((item, index) => (
                 <button
@@ -625,7 +612,7 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
                 </button>
               ))}
             </div>
-          </section>
+          </details>
         )}
       </aside>
       <section className="annotation-canvas-pane">
@@ -667,9 +654,23 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
             </button>
           </div>
           <div>
-            <button type="button" disabled={!data || busy} onClick={() => save()}>
+            <span className={`annotation-save-state ${dirty ? 'is-dirty' : ''}`}>
+              {busy
+                ? 'Đang xử lý…'
+                : dirty
+                  ? 'Có thay đổi chưa lưu'
+                  : data?.saved_at
+                    ? 'Đã lưu'
+                    : 'Chưa có thay đổi'}
+            </span>
+            <button
+              className="annotation-save-button"
+              type="button"
+              disabled={!data || busy}
+              onClick={() => save()}
+            >
               <Save size={14} />
-              {busy ? 'Đang xử lý…' : 'Lưu nhãn'}
+              {busy ? 'Đang lưu…' : 'Lưu nhãn'}
             </button>
             <button type="button" disabled={!data || busy} onClick={() => save(true)}>
               <Download size={14} />
@@ -692,39 +693,157 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
             {message}
           </div>
         )}
-        {!drawing ? (
-          <div className="annotation-empty">
-            <Scan size={38} />
-            <h2>Gán nhãn dữ liệu P&amp;ID</h2>
-            <p>Tải ảnh hoặc PDF để bắt đầu khoanh symbol. Không cần chạy pipeline AI.</p>
-          </div>
-        ) : !data ? (
-          <div className="annotation-empty">
-            <p>{error ? 'Chưa tải được dữ liệu gán nhãn.' : 'Đang tải dữ liệu gán nhãn…'}</p>
-          </div>
-        ) : (
-          <TiledDrawingCanvas
-            ref={canvas}
-            drawing={drawing}
-            results={renderScene}
-            reviewMode
-            selectedItem={
-              selection?.kind === 'relation' ? { ...selection, kind: 'connection' } : selection
-            }
-            onSelectItem={select}
-            onUpdateItem={update}
-            onCreateItem={create}
-            drawMode={currentTool === 'draw' && !busy ? mode : null}
-            panOnly={currentTool === 'pan' || busy}
-            showConnections={mode === 'relation'}
-            onZoomChange={setZoom}
-            viewerHint={hint}
-            onEditStart={() => {
-              dragSnapshot.current = snapshot(dataRef.current);
-            }}
-            onEditEnd={endDrag}
-          />
-        )}
+        <div className="annotation-canvas-viewport">
+          {saveNotice && !hidden && (
+            <div
+              className="annotation-save-toast"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <CheckCircle2 size={22} />
+              <div>
+                <strong>Lưu nhãn thành công</strong>
+                <span>
+                  Trang {page} · {saveNotice.symbols} symbol · {saveNotice.texts} OCR ·{' '}
+                  {saveNotice.relations} quan hệ
+                </span>
+              </div>
+              <button
+                type="button"
+                aria-label="Đóng thông báo lưu"
+                onClick={() => setSaveNotice(null)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+          )}
+          {!drawing ? (
+            <div className="annotation-empty">
+              <Scan size={38} />
+              <h2>Gán nhãn dữ liệu P&amp;ID</h2>
+              <p>Tải ảnh hoặc PDF để bắt đầu khoanh symbol. Không cần chạy pipeline AI.</p>
+            </div>
+          ) : !data ? (
+            <div className="annotation-empty">
+              <p>{error ? 'Chưa tải được dữ liệu gán nhãn.' : 'Đang tải dữ liệu gán nhãn…'}</p>
+            </div>
+          ) : (
+            <TiledDrawingCanvas
+              ref={canvas}
+              drawing={drawing}
+              results={renderScene}
+              reviewMode
+              showBoxLabels={false}
+              selectedItem={
+                selection?.kind === 'relation' ? { ...selection, kind: 'connection' } : selection
+              }
+              onSelectItem={select}
+              onUpdateItem={update}
+              onCreateItem={create}
+              drawMode={currentTool === 'draw' && !busy ? mode : null}
+              panOnly={currentTool === 'pan' || busy}
+              showConnections={mode === 'relation'}
+              onZoomChange={setZoom}
+              viewerHint={hint}
+              onEditStart={() => {
+                dragSnapshot.current = snapshot(dataRef.current);
+              }}
+              onEditEnd={endDrag}
+            />
+          )}
+          {selected && (
+            <section
+              className="annotation-section annotation-properties annotation-properties-popup"
+              role="dialog"
+              aria-modal="false"
+              aria-labelledby="annotation-properties-title"
+            >
+              <h3>
+                <span id="annotation-properties-title">Thông tin vùng chọn</span>
+                <span className="annotation-properties-controls">
+                  <button type="button" title="Xóa vùng gán nhãn" disabled={busy} onClick={remove}>
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    className="annotation-properties-close"
+                    title="Đóng thông tin vùng chọn"
+                    aria-label="Đóng thông tin vùng chọn"
+                    onClick={() => setSelection(null)}
+                  >
+                    <X size={16} />
+                  </button>
+                </span>
+              </h3>
+              {selection.kind === 'symbol' && (
+                <label className="annotation-field">
+                  <span>Nhãn của vùng chọn</span>
+                  <select
+                    aria-label="Nhãn của vùng chọn"
+                    value={selected.label_id}
+                    disabled={busy}
+                    onChange={(event) =>
+                      update('symbol', selected.id, { label_id: event.target.value })
+                    }
+                  >
+                    {classes.map((item) => (
+                      <option key={item.code} value={item.code}>
+                        {item.code} · {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
+              {selection.kind === 'text' && (
+                <label className="annotation-field">
+                  <span>Nội dung OCR</span>
+                  <textarea
+                    aria-label="Nội dung OCR"
+                    value={selected.text}
+                    disabled={busy}
+                    onChange={(event) => update('text', selected.id, { text: event.target.value })}
+                  />
+                </label>
+              )}
+              {selection.kind !== 'relation' && (
+                <div className="annotation-coordinates">
+                  {['x', 'y', 'width', 'height'].map((field) => (
+                    <label key={field}>
+                      <span>
+                        {field === 'width'
+                          ? 'Rộng'
+                          : field === 'height'
+                            ? 'Cao'
+                            : field.toUpperCase()}{' '}
+                        (px)
+                      </span>
+                      <input
+                        type="number"
+                        min={field === 'x' || field === 'y' ? 0 : 1}
+                        step="0.1"
+                        value={Math.round(selected[field] * 10) / 10}
+                        disabled={busy}
+                        onChange={(event) =>
+                          update(selection.kind, selected.id, {
+                            [field]: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </label>
+                  ))}
+                </div>
+              )}
+              {selection.kind === 'relation' && (
+                <p>
+                  {nodes.find((item) => item.id === selected.source)?.label_id ||
+                    nodes.find((item) => item.id === selected.source)?.text}{' '}
+                  → {nodes.find((item) => item.id === selected.target)?.label_id} · {selected.type}
+                </p>
+              )}
+            </section>
+          )}
+        </div>
         <div className="annotation-status">
           <span>
             {data
@@ -735,7 +854,7 @@ function AnnotationPage({ drawing, mode, catalog, documents, onChoose, onUpload,
             {dirty
               ? 'Bản nháp · chưa lưu máy chủ'
               : data?.saved_at
-                ? 'Đã lưu máy chủ'
+                ? `Đã lưu lúc ${new Date(data.saved_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`
                 : 'Chưa gán nhãn'}
           </span>
           <div>
@@ -782,6 +901,9 @@ export default function GenerateDataWorkspace({
   const [documents, setDocuments] = useState([]);
   const [catalog, setCatalog] = useState([]);
   const [error, setError] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [choosing, setChoosing] = useState(false);
+  const selectionRequest = useRef(0);
   useEffect(() => {
     if (hidden) return undefined;
     let cancelled = false;
@@ -819,15 +941,35 @@ export default function GenerateDataWorkspace({
     [drawing, documents],
   );
   const choose = async (id, page) => {
+    const request = ++selectionRequest.current;
+    setChoosing(true);
     try {
-      onDrawingChange(page === 1 ? await getDocument(id) : await getDocumentPage(id, page));
+      const loaded = await getDocumentPage(id, page);
+      if (request !== selectionRequest.current) return false;
+      onDrawingChange(loaded);
       setError('');
+      return true;
     } catch (cause) {
-      setError(cause.message);
+      if (request === selectionRequest.current) setError(cause.message);
+      return false;
+    } finally {
+      if (request === selectionRequest.current) setChoosing(false);
     }
   };
   return (
     <main className="generate-data-shell" hidden={hidden}>
+      <div className="generate-data-drawing-actions">
+        <span>
+          {drawing ? `Đang chỉnh sửa: ${drawing.name}` : 'Chọn bản vẽ để bắt đầu gán nhãn'}
+        </span>
+        <button
+          className="annotation-browse"
+          disabled={isUploading || choosing}
+          onClick={() => setPickerOpen(true)}
+        >
+          <FolderOpen size={16} /> Chọn bản vẽ từ Data
+        </button>
+      </div>
       <div className="generate-data-modes" role="tablist" aria-label="Loại dữ liệu gán nhãn">
         {modes.map(({ id, label, icon: Icon }) => (
           <button
@@ -863,9 +1005,17 @@ export default function GenerateDataWorkspace({
           documents={availableDocuments}
           onChoose={choose}
           onUpload={onUpload}
-          isUploading={isUploading}
+          isUploading={isUploading || choosing}
+          hidden={hidden}
         />
       </div>
+      {pickerOpen && !hidden && (
+        <ExistingDrawingPicker
+          drawing={drawing}
+          onChoose={choose}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
     </main>
   );
 }

@@ -42,10 +42,18 @@ def main() -> None:
     boundary = uuid.uuid4().hex
     image = (ROOT / "src/app/seed_symbols/PNG.png").read_bytes()
     upload = (
-        f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="smoke.png"\r\n'
-        'Content-Type: image/png\r\n\r\n'
-    ).encode() + image + f"\r\n--{boundary}--\r\n".encode()
-    drawing = json_request("/api/v1/documents/upload", data=upload, content_type=f"multipart/form-data; boundary={boundary}")
+        (
+            f'--{boundary}\r\nContent-Disposition: form-data; name="file"; filename="smoke.png"\r\n'
+            "Content-Type: image/png\r\n\r\n"
+        ).encode()
+        + image
+        + f"\r\n--{boundary}--\r\n".encode()
+    )
+    drawing = json_request(
+        "/api/v1/documents/upload",
+        data=upload,
+        content_type=f"multipart/form-data; boundary={boundary}",
+    )
     assert drawing["width"] > 0 and drawing["height"] > 0
     assert request(drawing["preview_url"])[1] == "image/jpeg"
     assert request(drawing["tile_url_template"].format(z=0, x=0, y=0))[1] == "image/png"
@@ -65,10 +73,20 @@ def main() -> None:
             job = json_request(f"/api/v1/jobs/{job['job_id']}")
         assert job["status"] == "COMPLETED", json.dumps(job, ensure_ascii=False)
         scene = json_request(job["results_url"])
-        assert isinstance(scene, dict) and all(isinstance(scene.get(name), list) for name in ("symbols", "texts", "lines", "topology_edges")), "Editor scene missing"
-        saved = json_request(f"/api/v1/jobs/{job['job_id']}/final-results", data=json.dumps(scene).encode(), content_type="application/json")
+        assert isinstance(scene, dict) and all(
+            isinstance(scene.get(name), list)
+            for name in ("symbols", "texts", "lines", "topology_edges")
+        ), "Editor scene missing"
+        saved = json_request(
+            f"/api/v1/jobs/{job['job_id']}/final-results",
+            data=json.dumps(scene).encode(),
+            content_type="application/json",
+        )
         assert saved["result"]["review"]["status"] == "FINAL"
-        assert json_request(f"/api/v1/jobs/{job['job_id']}/final-results")["review"]["status"] == "FINAL"
+        assert (
+            json_request(f"/api/v1/jobs/{job['job_id']}/final-results")["review"]["status"]
+            == "FINAL"
+        )
         print("PASS: real YOLO -> PaddleOCR -> lines -> topology -> editor scene", flush=True)
 
 

@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.db.models import Drawing, DetectedSymbol, Relationship
+from app.db.models import DetectedSymbol, Relationship
 from app.db.repositories.drawing_repository import DrawingRepository
 from app.schemas import (
     CytoscapeEdge,

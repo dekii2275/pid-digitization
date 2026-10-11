@@ -13,7 +13,6 @@ import shutil
 from pathlib import Path
 from typing import Any
 
-
 SCRIPT_DIR = Path(__file__).resolve().parent
 EDITOR_TEMPLATE = SCRIPT_DIR / "interactive_pid_editor.html"
 
@@ -212,7 +211,14 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
-    for path in (args.source, args.symbols, args.texts, args.lines, args.connectivity, EDITOR_TEMPLATE):
+    for path in (
+        args.source,
+        args.symbols,
+        args.texts,
+        args.lines,
+        args.connectivity,
+        EDITOR_TEMPLATE,
+    ):
         if not path.is_file():
             raise FileNotFoundError(path)
     scene_path = build_scene(

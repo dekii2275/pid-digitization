@@ -17,9 +17,7 @@ from typing import Any, Iterator, Sequence
 
 import cv2
 import numpy as np
-
 from class_names import CLASS_NAMES
-
 
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -173,7 +171,9 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("iou, tile-iou, and whole-iou must be in (0.0, 1.0].")
 
 
-def resolve_content_region(specification: str, image_width: int, image_height: int) -> ContentRegion:
+def resolve_content_region(
+    specification: str, image_width: int, image_height: int
+) -> ContentRegion:
     """Convert a normalized x1,y1,x2,y2 CLI region into source-image pixel bounds."""
 
     try:
@@ -500,7 +500,9 @@ def draw_detections(image: np.ndarray, detections: Sequence[Detection]) -> np.nd
 
 
 def output_directory(args: argparse.Namespace) -> Path:
-    return args.output_dir if args.output_dir is not None else DEFAULT_OUTPUT_ROOT / args.source.stem
+    return (
+        args.output_dir if args.output_dir is not None else DEFAULT_OUTPUT_ROOT / args.source.stem
+    )
 
 
 def build_output_document(
@@ -615,7 +617,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     result_path = destination / "detections.json"
     result_path.write_text(
-        json.dumps(build_output_document(args.source, args, page_results), ensure_ascii=False, indent=2),
+        json.dumps(
+            build_output_document(args.source, args, page_results), ensure_ascii=False, indent=2
+        ),
         encoding="utf-8",
     )
     print(f"Results written to: {result_path.resolve()}")

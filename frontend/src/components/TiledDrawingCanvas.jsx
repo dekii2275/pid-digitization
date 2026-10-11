@@ -2,7 +2,7 @@ import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState }
 
 const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), maximum);
 
-const symbolColors = ['#e67e22', '#0070c0', '#c0392b', '#239b56', '#7b3fb2'];
+const symbolColors = ['#c65d0e', '#005a9e', '#a92519', '#167a3e', '#642b98'];
 
 const asPoint = (value) => {
   if (Array.isArray(value) && value.length >= 2) return [Number(value[0]), Number(value[1])];
@@ -34,6 +34,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     showTags,
     showConnections,
     reviewMode = false,
+    showBoxLabels = true,
     selectedItem,
     onSelectItem,
     onUpdateItem,
@@ -51,6 +52,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
   const dragRef = useRef(null);
   const editRef = useRef(null);
   const createRef = useRef(null);
+  const fittedDrawingRef = useRef(null);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
   const [draftBox, setDraftBox] = useState(null);
@@ -78,8 +80,11 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     return () => observer.disconnect();
   }, []);
   useEffect(() => {
+    const drawingKey = `${drawing.id}-${drawing.page_number || 1}`;
+    if (!viewport.width || !viewport.height || fittedDrawingRef.current === drawingKey) return;
     fitDrawing();
-  }, [drawing.id, viewport.width, viewport.height]); // eslint-disable-line react-hooks/exhaustive-deps
+    fittedDrawingRef.current = drawingKey;
+  }, [drawing.id, drawing.page_number, viewport.width, viewport.height]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     onZoomChange?.(Math.round(view.scale * 100));
   }, [onZoomChange, view.scale]);
@@ -114,13 +119,8 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     },
   }));
 
-  // Prefer a sharper tile level over the smallest possible download. P&ID drawings
-  // contain thin lines and small tags that become visibly smeared when downsampled.
-  const tileLevel = clamp(
-    Math.ceil(drawing.max_zoom + Math.log2(view.scale)) + 1,
-    0,
-    drawing.max_zoom,
-  );
+  // Match the current zoom without loading an extra level of larger tiles.
+  const tileLevel = clamp(Math.ceil(drawing.max_zoom + Math.log2(view.scale)), 0, drawing.max_zoom);
   const sourceScale = 2 ** (tileLevel - drawing.max_zoom);
   const screenScale = view.scale / sourceScale;
   const levelWidth = Math.ceil(drawing.width * sourceScale);
@@ -168,7 +168,6 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
   const selected = (kind, id) =>
     selectedItem?.kind === kind && String(selectedItem.id) === String(id);
   const isReviewEditing = reviewMode && !showDetections;
-  const isEditingItem = (kind, id) => isReviewEditing && selected(kind, id);
   const notifySelection = (kind, item) => {
     if (!panOnly) onSelectItem?.({ kind, id: item.id });
   };
@@ -209,7 +208,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     // reviewer draw a new box even when the gesture starts over an existing
     // detection or OCR label.
     if (drawMode || panOnly) return;
-    if (!isEditingItem(kind, item.id)) {
+    if (!isReviewEditing) {
       selectOnly(event, kind, item);
       return;
     }
@@ -477,8 +476,9 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
                   }
                 }}
                 title={`${label} · ${symbol.id || 'Symbol'}`}
+                aria-label={`${label} · ${symbol.id || 'Symbol'}`}
               >
-                <span>{label}</span>
+                {showBoxLabels && <span>{label}</span>}
                 <i
                   className="bbox-handle bbox-handle--nw"
                   onPointerDown={(event) => startEdit(event, 'symbol', symbol, 'nw')}
@@ -510,6 +510,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
                 height: Number(text.height) * sourceScale,
               }}
               onPointerDown={(event) => startEdit(event, 'text', text)}
+              aria-label={`OCR · ${text.text || text.id || index + 1}`}
               onClick={(event) => {
                 if (!drawMode) notifySelection('text', text);
                 else {
@@ -518,7 +519,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
                 }
               }}
             >
-              {text.text}
+              {showBoxLabels && text.text}
               <i
                 className="bbox-handle bbox-handle--se"
                 onPointerDown={(event) => startEdit(event, 'text', text, 'se')}
@@ -539,7 +540,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
               }}
               title={`${symbol.type || 'Symbol'} · ${Math.round(Number(symbol.confidence || 0) * 100)}%`}
             >
-              <span>{symbol.type || 'Symbol'}</span>
+              {showBoxLabels && <span>{symbol.type || 'Symbol'}</span>}
             </button>
           ))}
         {showTags &&
@@ -555,7 +556,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
               }}
               title={text.text}
             >
-              {text.text}
+              {showBoxLabels && text.text}
             </div>
           ))}
         {draftBox && (
@@ -568,7 +569,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
               height: draftBox.height * sourceScale,
             }}
           >
-            <span>{drawMode === 'text' ? 'OCR' : 'Symbol'}</span>
+            {showBoxLabels && <span>{drawMode === 'text' ? 'OCR' : 'Symbol'}</span>}
           </div>
         )}
       </div>

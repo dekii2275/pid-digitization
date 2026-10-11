@@ -1,20 +1,22 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 from fastapi import FastAPI, HTTPException, Request, Response, UploadFile
-from starlette.types import Message
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.types import Message
+
 import logger_config
-from app.services.blob_storage_client import BlobStorageClient
 from app.models.enums.inference_result import InferenceResult
 from app.services import storage_path_template_builder
+from app.services.blob_storage_client import BlobStorageClient
 
 logger = logger_config.get_logger(__name__)
 
 
 class TracingMiddleware(BaseHTTPMiddleware):
-    '''
+    """
     This class is used to log the requests and responses of the API.
-    '''
+    """
+
     def __init__(self, app: FastAPI, blob_storage_client: BlobStorageClient):
         super().__init__(app)
         self.enable_storing_data = True
@@ -23,6 +25,7 @@ class TracingMiddleware(BaseHTTPMiddleware):
     async def set_body(self, request: Request, body: bytes):
         async def receive() -> Message:
             return {"type": "http.request", "body": body}
+
         request._receive = receive
 
     async def get_form(self, request: Request) -> bytes:
@@ -33,17 +36,22 @@ class TracingMiddleware(BaseHTTPMiddleware):
 
     def validate_file_to_upload(self, file_name: str) -> bool:
         file_name = file_name.lower()
-        if not (file_name.endswith(".jpg") or file_name.endswith(".jpeg") or file_name.endswith(".png")):
+        if not (
+            file_name.endswith(".jpg") or file_name.endswith(".jpeg") or file_name.endswith(".png")
+        ):
             raise HTTPException(status_code=400, detail="Bad Request")
 
     async def validate_body_to_upload(self, id: str, request: Request) -> bool:
         body = await request.json()
 
-        if 'image_url' in body:
-            image_url = body.get('image_url').rsplit('.', 1)[0]
+        if "image_url" in body:
+            image_url = body.get("image_url").rsplit(".", 1)[0]
 
             if not id == image_url:
-                raise HTTPException(status_code=400, detail="Bad Request. The id in the url and the image_url in the body are not the same")
+                raise HTTPException(
+                    status_code=400,
+                    detail="Bad Request. The id in the url and the image_url in the body are not the same",
+                )
 
     async def dispatch(self, request: Request, call_next):
         try:
@@ -64,8 +72,8 @@ class TracingMiddleware(BaseHTTPMiddleware):
                 inference_method = InferenceResult(method_name)
 
                 # checking the existance of the file in the form data
-                if 'file' in form_data:
-                    file = UploadFile(form_data['file'])
+                if "file" in form_data:
+                    file = UploadFile(form_data["file"])
 
                     # only will upload jpg/png files
                     self.validate_file_to_upload(file.file.filename)
@@ -77,12 +85,14 @@ class TracingMiddleware(BaseHTTPMiddleware):
 
                     logger.info(f"Uploaded file to: {blob_name}")
 
-                if request.headers['Content-Type'] == 'application/json':
+                if request.headers["Content-Type"] == "application/json":
                     await self.validate_body_to_upload(id, request)
 
                     # upload the body of the request as a json file
                     file_content = await request.body()
-                    blob_name = storage_path_template_builder.build_inference_request_path(id, inference_method)
+                    blob_name = storage_path_template_builder.build_inference_request_path(
+                        id, inference_method
+                    )
                     self.blob_storage_client.upload_bytes(blob_name, file_content)
                     logger.info(f"Uploaded file to: {blob_name}")
 
@@ -96,12 +106,18 @@ class TracingMiddleware(BaseHTTPMiddleware):
                     response_body = b""
                     async for chunk in response.body_iterator:
                         response_body += chunk
-                    blob_name = storage_path_template_builder.build_inference_response_path(id, inference_method)
+                    blob_name = storage_path_template_builder.build_inference_response_path(
+                        id, inference_method
+                    )
                     self.blob_storage_client.upload_bytes(blob_name, response_body.decode())
                     logger.info(f"Uploaded file to: {blob_name}")
 
-                    return Response(content=response_body, status_code=response.status_code,
-                                    headers=dict(response.headers), media_type=response.media_type)
+                    return Response(
+                        content=response_body,
+                        status_code=response.status_code,
+                        headers=dict(response.headers),
+                        media_type=response.media_type,
+                    )
 
             return response
         except HTTPException as ex:

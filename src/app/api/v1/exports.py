@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict
+
 from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy.orm import Session
 
@@ -36,7 +37,5 @@ def export_dexpi_xml(drawing_id: int, db: Session = Depends(get_db)) -> Response
     return Response(
         content=xml_content,
         media_type="application/xml",
-        headers={
-            "Content-Disposition": f"attachment; filename=dexpi_{drawing.name}.xml"
-        },
+        headers={"Content-Disposition": f"attachment; filename=dexpi_{drawing.name}.xml"},
     )

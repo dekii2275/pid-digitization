@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
-import json
-from typing import Any, Dict, List
 import xml.etree.ElementTree as ET
+from typing import Any, Dict
 from xml.dom import minidom
 
-from app.db.models import Drawing, DetectedSymbol, Relationship, DetectedLine
+from app.db.models import Drawing
 
 
 class DexpiExporter:
@@ -44,26 +43,32 @@ class DexpiExporter:
 
         # Lines
         for line in drawing.lines:
-            lines.append({
-                "id": f"line_{line.id}",
-                "line_type": line.line_type,
-                "geometry": line.geometry,
-                "confidence": line.confidence,
-                "flow_direction": line.flow_direction,
-            })
+            lines.append(
+                {
+                    "id": f"line_{line.id}",
+                    "line_type": line.line_type,
+                    "geometry": line.geometry,
+                    "confidence": line.confidence,
+                    "flow_direction": line.flow_direction,
+                }
+            )
 
         # Relationships
         symbol_map = {s.id: s for s in drawing.symbols}
         for rel in drawing.relationships:
             from_sym = symbol_map.get(rel.from_symbol_id)
             to_sym = symbol_map.get(rel.to_symbol_id)
-            relationships.append({
-                "from": from_sym.tag if from_sym and from_sym.tag else f"sym_{rel.from_symbol_id}",
-                "to": to_sym.tag if to_sym and to_sym.tag else f"sym_{rel.to_symbol_id}",
-                "type": rel.relation_type,
-                "line": rel.line_tag or (f"line_{rel.line_id}" if rel.line_id else "-"),
-                "confidence": rel.confidence,
-            })
+            relationships.append(
+                {
+                    "from": from_sym.tag
+                    if from_sym and from_sym.tag
+                    else f"sym_{rel.from_symbol_id}",
+                    "to": to_sym.tag if to_sym and to_sym.tag else f"sym_{rel.to_symbol_id}",
+                    "type": rel.relation_type,
+                    "line": rel.line_tag or (f"line_{rel.line_id}" if rel.line_id else "-"),
+                    "confidence": rel.confidence,
+                }
+            )
 
         return {
             "drawing_name": drawing.name,

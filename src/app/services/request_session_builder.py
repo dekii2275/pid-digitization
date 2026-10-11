@@ -1,8 +1,9 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
+from typing import List
+
 from requests import Session
 from requests.adapters import HTTPAdapter, Retry
-from typing import List
 
 
 def build_request_session(
@@ -10,9 +11,9 @@ def build_request_session(
     retry_backoff_factor: float,
     status_forcelist: List[int],
     allowed_methods: List[str],
-    mount_prefixes: List[str]
+    mount_prefixes: List[str],
 ) -> Session:
-    '''Builds a request session with retry logic.
+    """Builds a request session with retry logic.
 
     :param retry_count: The number of times to retry
     :type retry_count: int
@@ -25,14 +26,15 @@ def build_request_session(
     :param mount_prefixes: The list of prefixes to mount the retry logic to
     :type mount_prefixes: List[str]
     :return: The request session with retry logic
-    :rtype: Session'''
+    :rtype: Session"""
 
     session = Session()
     retries = Retry(
         total=retry_count,
         backoff_factor=retry_backoff_factor,
         status_forcelist=status_forcelist,
-        allowed_methods=allowed_methods)
+        allowed_methods=allowed_methods,
+    )
 
     for mount_prefix in mount_prefixes:
         session.mount(mount_prefix, HTTPAdapter(max_retries=retries))

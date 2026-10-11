@@ -25,7 +25,7 @@ import argparse
 import warnings
 from collections import Counter
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, List, Optional, Sequence
 
 from class_names import CLASS_NAMES
 
@@ -40,8 +40,7 @@ def is_dataset_root(path: Path) -> bool:
     """Return whether path has the expected YOLO directory layout."""
 
     return all(
-        (path / "images" / split).is_dir()
-        and (path / "labels" / split).is_dir()
+        (path / "images" / split).is_dir() and (path / "labels" / split).is_dir()
         for split in SPLITS
     )
 
@@ -58,10 +57,7 @@ def resolve_dataset_root(explicit_root: Optional[str]) -> Path:
         candidates.extend(
             [
                 Path.cwd(),
-                workspace_root
-                / "data"
-                / "sherifahmed-digitize-pid-yolo"
-                / "DigitizePID_Dataset",
+                workspace_root / "data" / "sherifahmed-digitize-pid-yolo" / "DigitizePID_Dataset",
                 workspace_root / "data" / "sherifahmed-digitize-pid-yolo",
                 Path("/kaggle/input"),
             ]
@@ -137,15 +133,11 @@ def validate_split(root: Path, split: str) -> Dict[str, object]:
                 continue
             fields = line.split()
             if len(fields) != 5:
-                errors.append(
-                    f"{label_file}:{line_number}: expected 5 fields, got {len(fields)}"
-                )
+                errors.append(f"{label_file}:{line_number}: expected 5 fields, got {len(fields)}")
                 continue
             try:
                 class_id = int(fields[0])
-                x_center, y_center, width, height = (
-                    float(value) for value in fields[1:]
-                )
+                x_center, y_center, width, height = (float(value) for value in fields[1:])
             except ValueError as exc:
                 errors.append(f"{label_file}:{line_number}: invalid numeric value ({exc})")
                 continue
@@ -214,9 +206,7 @@ def write_dataset_yaml(root: Path, output_dir: Path) -> Path:
     return yaml_path
 
 
-def print_summary(
-    root: Path, stats: Dict[str, Dict[str, object]], yaml_path: Path
-) -> None:
+def print_summary(root: Path, stats: Dict[str, Dict[str, object]], yaml_path: Path) -> None:
     print(f"Dataset root: {root}")
     print(f"Dataset YAML: {yaml_path}")
     print(f"Classes: {len(CLASS_NAMES)}")

@@ -5,7 +5,6 @@ from __future__ import annotations
 import io
 import json
 import threading
-import uuid
 import zipfile
 from datetime import datetime, timezone
 
@@ -51,7 +50,7 @@ class AnnotationRequest(StrictModel):
     relations: list[Relation] = Field(default_factory=list, max_length=20000)
 
 
-def create_router(record_lookup, page_image, storage_root):
+def create_router(record_lookup, page_image, repository):
     router = APIRouter(prefix="/api/v1/documents")
     lock = threading.RLock()
 
@@ -60,14 +59,12 @@ def create_router(record_lookup, page_image, storage_root):
         image_path = page_image(record, page_number)
         with Image.open(image_path) as image:
             width, height = image.size
-        path = storage_root() / drawing_id / f"page-{page_number}.json"
-        return record, image_path, width, height, path
+        return record, image_path, width, height
 
     def read(drawing_id, page_number):
-        record, _, width, height, path = context(drawing_id, page_number)
-        if path.is_file():
-            data = json.loads(path.read_text(encoding="utf-8"))
-        else:
+        record, _, width, height = context(drawing_id, page_number)
+        data = repository.read_annotation(drawing_id, page_number)
+        if data is None:
             data = {
                 "schema_version": 1,
                 "revision": 0,
@@ -84,35 +81,8 @@ def create_router(record_lookup, page_image, storage_root):
                 "texts": [],
                 "relations": [],
             }
-        # Share a durable mapping across all drawings/pages. Class IDs never move
-        # when labels are added, renamed or deleted, so page exports can be combined.
-        class_path = storage_root() / "classes.json"
-        classes = (
-            json.loads(class_path.read_text(encoding="utf-8"))
-            if class_path.is_file()
-            else data["classes"]
-        )
-        original = json.dumps(classes, ensure_ascii=False)
-        known = {item["code"] for item in classes}
-        for item in sorted(list_symbols(), key=lambda item: item["code"]):
-            if item["enabled"] and item["code"] not in known:
-                classes.append(
-                    {
-                        "id": len(classes),
-                        "code": item["code"],
-                        "name": item["name"],
-                        "category": item["category"],
-                    }
-                )
-                known.add(item["code"])
-        if not class_path.exists() or original != json.dumps(classes, ensure_ascii=False):
-            class_path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = class_path.with_name(f"classes.{uuid.uuid4().hex}.tmp")
-            temporary.write_text(
-                json.dumps(classes, ensure_ascii=False, indent=2), encoding="utf-8"
-            )
-            temporary.replace(class_path)
-        data["classes"] = classes
+        # PostgreSQL keeps one stable class mapping across every drawing/page.
+        data["classes"] = repository.sync_classes(list_symbols())
         return data
 
     @router.get("/{drawing_id}/pages/{page_number}/annotations")
@@ -128,7 +98,7 @@ def create_router(record_lookup, page_image, storage_root):
                 raise HTTPException(
                     409, "Dữ liệu đã được lưu ở phiên khác. Tải lại bản lưu trước khi tiếp tục."
                 )
-            _, _, width, height, path = context(drawing_id, page_number)
+            _, _, width, height = context(drawing_id, page_number)
             ids = [item.id for item in [*request.symbols, *request.texts, *request.relations]]
             if len(ids) != len(set(ids)):
                 raise HTTPException(422, "ID của các nhãn và quan hệ phải khác nhau.")
@@ -162,10 +132,7 @@ def create_router(record_lookup, page_image, storage_root):
                 texts=[item.model_dump() for item in request.texts],
                 relations=[item.model_dump() for item in request.relations],
             )
-            path.parent.mkdir(parents=True, exist_ok=True)
-            temporary = path.with_name(f"{path.name}.{uuid.uuid4().hex}.tmp")
-            temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-            temporary.replace(path)
+            repository.save_annotation(drawing_id, page_number, data, request.revision)
             return data
 
     @router.get("/{drawing_id}/pages/{page_number}/annotations/export")
@@ -174,7 +141,7 @@ def create_router(record_lookup, page_image, storage_root):
             data = read(drawing_id, page_number)
         if data["saved_at"] is None:
             raise HTTPException(409, "Lưu nhãn trước khi xuất dữ liệu.")
-        _, image_path, width, height, _ = context(drawing_id, page_number)
+        _, image_path, width, height = context(drawing_id, page_number)
         stem = f"{drawing_id}-p{page_number}"
         image_bytes = io.BytesIO()
         with Image.open(image_path) as image:

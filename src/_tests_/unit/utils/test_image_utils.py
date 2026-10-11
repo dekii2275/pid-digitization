@@ -1,21 +1,26 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
 import os
-import unittest
 import sys
+import unittest
+
 import pytest
 
 from app.models.bounding_box import BoundingBox
-from app.utils.image_utils import get_image_dimensions, is_data_element_within_bounding_box, validate_normalized_bounding_box
+from app.utils.image_utils import (
+    get_image_dimensions,
+    is_data_element_within_bounding_box,
+    validate_normalized_bounding_box,
+)
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 
 
 class TestGetImageDimensions(unittest.TestCase):
     def test_happy_path(self):
         # arrange
-        image_path = os.path.join(os.path.dirname(__file__), 'data', 'input', 'image.png')
-        with open(image_path, 'rb') as f:
+        image_path = os.path.join(os.path.dirname(__file__), "data", "input", "image.png")
+        with open(image_path, "rb") as f:
             image_bytes = f.read()
 
         # act
@@ -38,8 +43,12 @@ class TestValidateNormalizedBoundingBox(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_bounding_box_raises_value_error(self):
         # arrange
-        bounding_box_inclusive_denormalized = BoundingBox(topX=0.0, topY=0.0, bottomX=2.0, bottomY=2.0)
-        bounding_box_inclusive_coords_wrong_order = BoundingBox(bottomX=0.0, bottomY=0.0, topX=1.0, topY=1.0)
+        bounding_box_inclusive_denormalized = BoundingBox(
+            topX=0.0, topY=0.0, bottomX=2.0, bottomY=2.0
+        )
+        bounding_box_inclusive_coords_wrong_order = BoundingBox(
+            bottomX=0.0, bottomY=0.0, topX=1.0, topY=1.0
+        )
 
         # act
         with pytest.raises(Exception) as e1:
@@ -49,11 +58,17 @@ class TestValidateNormalizedBoundingBox(unittest.IsolatedAsyncioTestCase):
             await validate_normalized_bounding_box(bounding_box_inclusive_coords_wrong_order)
 
         # assert
-        assert e1.type == ValueError
-        assert 'Invalid bounding_box_inclusive coordinates. Normalized coordinates must be between 0 and 1.' in str(e1.value)
+        assert e1.type is ValueError
+        assert (
+            "Invalid bounding_box_inclusive coordinates. Normalized coordinates must be between 0 and 1."
+            in str(e1.value)
+        )
 
-        assert e2.type == ValueError
-        assert 'Invalid bounding_box_inclusive coordinates. Normalized coordinates must be between 0 and 1.' in str(e2.value)
+        assert e2.type is ValueError
+        assert (
+            "Invalid bounding_box_inclusive coordinates. Normalized coordinates must be between 0 and 1."
+            in str(e2.value)
+        )
 
 
 class TestValidateDataElementInclusion(unittest.TestCase):
@@ -66,7 +81,9 @@ class TestValidateDataElementInclusion(unittest.TestCase):
         bottomY = 0.5
 
         # act
-        result = is_data_element_within_bounding_box(bounding_box_inclusive, topX, topY, bottomX, bottomY)
+        result = is_data_element_within_bounding_box(
+            bounding_box_inclusive, topX, topY, bottomX, bottomY
+        )
 
         # assert
         self.assertEqual(result, True)
@@ -80,7 +97,9 @@ class TestValidateDataElementInclusion(unittest.TestCase):
         bottomY = 0.5
 
         # act
-        result = is_data_element_within_bounding_box(bounding_box_inclusive, topX, topY, bottomX, bottomY)
+        result = is_data_element_within_bounding_box(
+            bounding_box_inclusive, topX, topY, bottomX, bottomY
+        )
 
         # assert
         self.assertEqual(result, False)
@@ -94,7 +113,9 @@ class TestValidateDataElementInclusion(unittest.TestCase):
         bottomY = 0.6
 
         # act
-        result = is_data_element_within_bounding_box(bounding_box_inclusive, topX, topY, bottomX, bottomY)
+        result = is_data_element_within_bounding_box(
+            bounding_box_inclusive, topX, topY, bottomX, bottomY
+        )
 
         # assert
         self.assertEqual(result, False)
@@ -108,7 +129,9 @@ class TestValidateDataElementInclusion(unittest.TestCase):
         bottomY = 0.4
 
         # act
-        result = is_data_element_within_bounding_box(bounding_box_inclusive, topX, topY, bottomX, bottomY)
+        result = is_data_element_within_bounding_box(
+            bounding_box_inclusive, topX, topY, bottomX, bottomY
+        )
 
         # assert
         self.assertEqual(result, False)
@@ -122,7 +145,9 @@ class TestValidateDataElementInclusion(unittest.TestCase):
         bottomY = 0.4
 
         # act
-        result = is_data_element_within_bounding_box(bounding_box_inclusive, topX, topY, bottomX, bottomY)
+        result = is_data_element_within_bounding_box(
+            bounding_box_inclusive, topX, topY, bottomX, bottomY
+        )
 
         # assert
         self.assertEqual(result, False)
@@ -136,7 +161,9 @@ class TestValidateDataElementInclusion(unittest.TestCase):
         bottomY = 0.5
 
         # act
-        result = is_data_element_within_bounding_box(bounding_box_inclusive, topX, topY, bottomX, bottomY)
+        result = is_data_element_within_bounding_box(
+            bounding_box_inclusive, topX, topY, bottomX, bottomY
+        )
 
         # assert
         self.assertEqual(result, True)

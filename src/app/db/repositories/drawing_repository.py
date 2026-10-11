@@ -3,21 +3,19 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List, Optional
-from sqlalchemy.orm import Session, selectinload
+
 from sqlalchemy import or_
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.models import (
-    Project,
-    Drawing,
-    DrawingPage,
-    ProcessingJob,
-    DetectedSymbol,
-    OcrText,
     DetectedLine,
+    DetectedSymbol,
+    Drawing,
+    OcrText,
+    ProcessingJob,
+    Project,
     Relationship,
     Revision,
-    AuditLog,
-    Export,
 )
 
 
@@ -87,7 +85,11 @@ class DrawingRepository:
         return query.order_by(Drawing.created_at.desc()).all()
 
     def update_drawing_status(
-        self, drawing_id: int, status: str, width: Optional[int] = None, height: Optional[int] = None
+        self,
+        drawing_id: int,
+        status: str,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
     ) -> Optional[Drawing]:
         drawing = self.get_drawing(drawing_id)
         if drawing:
@@ -240,7 +242,9 @@ class DrawingRepository:
         for r in rels:
             is_from = r.from_symbol_id == target_symbol.id
             other_id = r.to_symbol_id if is_from else r.from_symbol_id
-            other_symbol = self.db.query(DetectedSymbol).filter(DetectedSymbol.id == other_id).first()
+            other_symbol = (
+                self.db.query(DetectedSymbol).filter(DetectedSymbol.id == other_id).first()
+            )
             if other_symbol:
                 connected_items.append(
                     {
@@ -261,7 +265,12 @@ class DrawingRepository:
                 "id": target_symbol.id,
                 "category": target_symbol.category,
                 "class_name": target_symbol.class_name,
-                "bbox": [target_symbol.bbox_x1, target_symbol.bbox_y1, target_symbol.bbox_x2, target_symbol.bbox_y2],
+                "bbox": [
+                    target_symbol.bbox_x1,
+                    target_symbol.bbox_y1,
+                    target_symbol.bbox_x2,
+                    target_symbol.bbox_y2,
+                ],
             },
             "connections": connected_items,
         }

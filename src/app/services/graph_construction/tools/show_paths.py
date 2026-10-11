@@ -1,15 +1,18 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-import os
 import argparse
 import json
-import cv2
+import os
 from typing import Union
+
+import cv2
+
+from app.models.bounding_box import BoundingBox
 from app.models.graph_construction.base_connected_symbols_item import BaseConnectedSymbolsItem
 from app.models.graph_construction.connected_symbols_item import ConnectedSymbolsItem
-from app.models.graph_construction.graph_construction_response import GraphConstructionInferenceResponse
-from app.models.bounding_box import BoundingBox
-
+from app.models.graph_construction.graph_construction_response import (
+    GraphConstructionInferenceResponse,
+)
 
 STARTING_ASSET_COLOR = (255, 0, 0)  # dark blue
 CONNECTED_ASSET_COLOR = (0, 128, 0)  # dark green
@@ -19,48 +22,40 @@ VISITED_ASSET_COLOR = (192, 192, 192)
 def _get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--image-path',
-        type=str,
-        dest='image_path',
-        help='The path to the image',
-        required=True
+        "--image-path", type=str, dest="image_path", help="The path to the image", required=True
     )
     parser.add_argument(
-        '--asset-connectivity-path',
+        "--asset-connectivity-path",
         type=str,
-        dest='asset_connectivity_path',
-        help='The path to the asset connectivity json file',
-        required=True
+        dest="asset_connectivity_path",
+        help="The path to the asset connectivity json file",
+        required=True,
     )
     parser.add_argument(
-        '--starting-asset-id',
+        "--starting-asset-id",
         type=int,
-        dest='starting_asset_id',
-        help='The starting asset id',
-        required=True
+        dest="starting_asset_id",
+        help="The starting asset id",
+        required=True,
     )
     parser.add_argument(
-        '--output-folder-path',
+        "--output-folder-path",
         type=str,
-        dest='output_folder_path',
-        help='The output path',
-        required=True
+        dest="output_folder_path",
+        help="The output path",
+        required=True,
     )
 
     args = parser.parse_args()
     return args
 
 
-def _denormalize_bounding_box(
-    bounding_box: BoundingBox,
-    image_height: int,
-    image_width: int
-):
+def _denormalize_bounding_box(bounding_box: BoundingBox, image_height: int, image_width: int):
     return BoundingBox(
         topX=int(bounding_box.topX * image_width),
         topY=int(bounding_box.topY * image_height),
         bottomX=int(bounding_box.bottomX * image_width),
-        bottomY=int(bounding_box.bottomY * image_height)
+        bottomY=int(bounding_box.bottomY * image_height),
     )
 
 
@@ -69,20 +64,16 @@ def _draw_asset_on_image(
     image_height: int,
     image_width: int,
     asset: BaseConnectedSymbolsItem,
-    color: tuple[int, int, int]
+    color: tuple[int, int, int],
 ):
-    asset_bounding_box = _denormalize_bounding_box(
-        asset.bounding_box,
-        image_height,
-        image_width
-    )
+    asset_bounding_box = _denormalize_bounding_box(asset.bounding_box, image_height, image_width)
 
     cv2.rectangle(
         img=image,
         pt1=(int(asset_bounding_box.topX), int(asset_bounding_box.topY)),
         pt2=(int(asset_bounding_box.bottomX), int(asset_bounding_box.bottomY)),
         color=color,
-        thickness=4
+        thickness=4,
     )
     cv2.putText(
         img=image,
@@ -91,7 +82,7 @@ def _draw_asset_on_image(
         fontFace=cv2.FONT_HERSHEY_SIMPLEX,
         fontScale=1,
         color=color,
-        thickness=3
+        thickness=3,
     )
 
 
@@ -100,58 +91,36 @@ def _draw_bounding_box_on_image(
     image_height: int,
     image_width: int,
     bounding_box: BoundingBox,
-    color: tuple[int, int, int]
+    color: tuple[int, int, int],
 ):
-    bounding_box = _denormalize_bounding_box(
-        bounding_box,
-        image_height,
-        image_width
-    )
+    bounding_box = _denormalize_bounding_box(bounding_box, image_height, image_width)
 
     cv2.rectangle(
         img=image,
         pt1=(int(bounding_box.topX), int(bounding_box.topY)),
         pt2=(int(bounding_box.bottomX), int(bounding_box.bottomY)),
         color=color,
-        thickness=2
+        thickness=2,
     )
 
 
-def main(
-    image: cv2.Mat,
-    asset_connectivity: ConnectedSymbolsItem,
-    output_path: str
-):
-    print('Starting program to show paths')
+def main(image: cv2.Mat, asset_connectivity: ConnectedSymbolsItem, output_path: str):
+    print("Starting program to show paths")
     image_height, image_width, _ = image.shape
 
     for connected_asset in asset_connectivity.connections:
         _draw_asset_on_image(
-            image,
-            image_height,
-            image_width,
-            connected_asset,
-            CONNECTED_ASSET_COLOR
+            image, image_height, image_width, connected_asset, CONNECTED_ASSET_COLOR
         )
 
         for visited_element in connected_asset.segments:
             _draw_bounding_box_on_image(
-                image,
-                image_height,
-                image_width,
-                visited_element,
-                VISITED_ASSET_COLOR
+                image, image_height, image_width, visited_element, VISITED_ASSET_COLOR
             )
 
-    _draw_asset_on_image(
-        image,
-        image_height,
-        image_width,
-        asset_connectivity,
-        STARTING_ASSET_COLOR
-    )
+    _draw_asset_on_image(image, image_height, image_width, asset_connectivity, STARTING_ASSET_COLOR)
 
-    print(f'Saving image to {output_path}')
+    print(f"Saving image to {output_path}")
     cv2.imwrite(output_path, image)
 
 
@@ -168,7 +137,7 @@ if __name__ == "__main__":
     if not os.path.exists(asset_connectivity_path):
         raise Exception(f'Asset connectivity path "{asset_connectivity_path}" does not exist')
 
-    with open(asset_connectivity_path, 'r') as f:
+    with open(asset_connectivity_path, "r") as f:
         asset_connectivity = json.load(f)
 
     if not os.path.exists(output_folder_path):
@@ -177,12 +146,12 @@ if __name__ == "__main__":
 
     output_file_name = os.path.basename(image_path)
     output_file_name = os.path.splitext(output_file_name)[0]
-    output_file_name = f'{output_file_name}_{starting_asset_id}.png'
+    output_file_name = f"{output_file_name}_{starting_asset_id}.png"
     output_path = os.path.join(output_folder_path, output_file_name)
 
-    asset_connectivity: GraphConstructionInferenceResponse = GraphConstructionInferenceResponse \
-        .parse_obj(asset_connectivity) \
-        .connected_symbols
+    asset_connectivity: GraphConstructionInferenceResponse = (
+        GraphConstructionInferenceResponse.parse_obj(asset_connectivity).connected_symbols
+    )
     image = cv2.imread(image_path)
 
     # check if starting asset is in asset connectivity
@@ -195,7 +164,4 @@ if __name__ == "__main__":
     if not connected_asset_item:
         raise Exception(f'Starting symbol "{starting_asset_id}" not found in asset connectivity')
 
-    main(
-        image,
-        connected_asset_item,
-        output_path)
+    main(image, connected_asset_item, output_path)

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, DateTime, ForeignKey, JSON
+
+from sqlalchemy import JSON, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -14,7 +15,9 @@ class ProcessingJob(Base):
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
     job_id = Column(String(64), unique=True, index=True, nullable=False)
-    drawing_id = Column(Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True)
+    drawing_id = Column(
+        Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
 
     status = Column(String(50), nullable=False, default="QUEUED", index=True)
     # QUEUED, RUNNING, COMPLETED, FAILED

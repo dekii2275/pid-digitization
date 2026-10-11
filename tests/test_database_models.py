@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -15,19 +15,6 @@ if str(SRC_ROOT) not in sys.path:
     sys.path.insert(0, str(SRC_ROOT))
 
 from app.core.database import Base
-from app.db.models import (
-    Project,
-    Drawing,
-    DrawingPage,
-    ProcessingJob,
-    DetectedSymbol,
-    OcrText,
-    DetectedLine,
-    Relationship,
-    Revision,
-    AuditLog,
-    Export,
-)
 from app.db.repositories.drawing_repository import DrawingRepository
 
 
@@ -69,7 +56,10 @@ class TestDatabaseModels(unittest.TestCase):
     def test_02_processing_job_lifecycle(self):
         project = self.repo.create_project(name="Job Test Project")
         drawing = self.repo.create_drawing(
-            name="PID-Job", original_filename="test.jpg", file_path="/uploads/test.jpg", project_id=project.id
+            name="PID-Job",
+            original_filename="test.jpg",
+            file_path="/uploads/test.jpg",
+            project_id=project.id,
         )
 
         job = self.repo.create_job(job_id="job-12345", drawing_id=drawing.id)
@@ -90,7 +80,10 @@ class TestDatabaseModels(unittest.TestCase):
     def test_03_bulk_save_ai_results_and_topology(self):
         project = self.repo.create_project(name="Topology Test Project")
         drawing = self.repo.create_drawing(
-            name="PID-Topology", original_filename="4.jpg", file_path="/uploads/4.jpg", project_id=project.id
+            name="PID-Topology",
+            original_filename="4.jpg",
+            file_path="/uploads/4.jpg",
+            project_id=project.id,
         )
 
         # 1. Symbols
@@ -169,7 +162,9 @@ class TestDatabaseModels(unittest.TestCase):
             {
                 "drawing_id": drawing.id,
                 "line_type": "pipe",
-                "geometry": {"points": [[400.0, 550.0], [450.0, 550.0], [450.0, 580.0], [500.0, 580.0]]},
+                "geometry": {
+                    "points": [[400.0, 550.0], [450.0, 550.0], [450.0, 580.0], [500.0, 580.0]]
+                },
                 "confidence": 0.92,
                 "flow_direction": "left-to-right",
             }
@@ -216,7 +211,10 @@ class TestDatabaseModels(unittest.TestCase):
     def test_04_revision_and_audit_logging(self):
         project = self.repo.create_project(name="Revision Test Project")
         drawing = self.repo.create_drawing(
-            name="PID-Rev", original_filename="rev.jpg", file_path="/uploads/rev.jpg", project_id=project.id
+            name="PID-Rev",
+            original_filename="rev.jpg",
+            file_path="/uploads/rev.jpg",
+            project_id=project.id,
         )
 
         # Record revision: engineer edits connection from V-103 to V-102

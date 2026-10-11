@@ -9,10 +9,10 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "lint": "oxlint",
+    "lint": "oxlint --deny-warnings src vite.config.js",
     "preview": "vite preview",
-    "format": "prettier --write src/App.jsx src/App.css \"src/components/*Symbol*.jsx\" src/components/GenerateDataWorkspace.jsx src/components/TiledDrawingCanvas.jsx src/services/annotations.js src/services/symbolLibrary.js",
-    "format:check": "prettier --check src/App.jsx src/App.css \"src/components/*Symbol*.jsx\" src/components/GenerateDataWorkspace.jsx src/components/TiledDrawingCanvas.jsx src/services/annotations.js src/services/symbolLibrary.js"
+    "format": "prettier --write src vite.config.js index.html package.json",
+    "format:check": "prettier --check src vite.config.js index.html package.json"
   },
   "dependencies": {
     "cytoscape": "^3.34.3",

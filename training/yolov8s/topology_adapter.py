@@ -22,7 +22,6 @@ from typing import Any, Iterable, Sequence
 import cv2
 import numpy as np
 
-
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 LEGACY_SOURCE_ROOT = REPOSITORY_ROOT / "src"
 if str(LEGACY_SOURCE_ROOT) not in sys.path:
@@ -115,9 +114,6 @@ from app.models.symbol_detection.symbol_detection_inference_response import (  #
 from app.models.text_detection.symbol_and_text_associated import (  # noqa: E402
     SymbolAndTextAssociated,
 )
-from app.models.text_detection.text_detection_inference_response import (  # noqa: E402
-    TextDetectionInferenceResponse,
-)
 from app.models.text_detection.text_recognized import TextRecognized  # noqa: E402
 from app.services.graph_construction.graph_construction_service import (  # noqa: E402
     construct_graph,
@@ -125,7 +121,6 @@ from app.services.graph_construction.graph_construction_service import (  # noqa
 from app.services.text_detection.symbol_to_text_correlation_service import (  # noqa: E402
     correlate_symbols_with_text,
 )
-
 
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 
@@ -295,9 +290,7 @@ def _build_symbols(
             skipped += 1
             continue
         try:
-            top_x, top_y, bottom_x, bottom_y = _normalise_bbox(
-                _extract_bbox(item), width, height
-            )
+            top_x, top_y, bottom_x, bottom_y = _normalise_bbox(_extract_bbox(item), width, height)
         except AdapterError:
             skipped += 1
             continue
@@ -350,9 +343,7 @@ def _build_texts(
             skipped += 1
             continue
         try:
-            top_x, top_y, bottom_x, bottom_y = _normalise_bbox(
-                _extract_bbox(item), width, height
-            )
+            top_x, top_y, bottom_x, bottom_y = _normalise_bbox(_extract_bbox(item), width, height)
         except AdapterError:
             skipped += 1
             continue
@@ -431,9 +422,7 @@ def _build_lines(
         except (TypeError, ValueError, AdapterError):
             skipped += 1
             continue
-        output.append(
-            LineSegment(startX=start_x, startY=start_y, endX=end_x, endY=end_y)
-        )
+        output.append(LineSegment(startX=start_x, startY=start_y, endX=end_x, endY=end_y))
 
     result = LineDetectionInferenceResponse(
         image_url=str(payload.get("source", "local-line-detections")),
@@ -622,9 +611,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if not path.is_file():
             raise FileNotFoundError(path)
     prefixes = tuple(
-        item.strip()
-        for item in args.symbol_label_prefixes_with_text.split(",")
-        if item.strip()
+        item.strip() for item in args.symbol_label_prefixes_with_text.split(",") if item.strip()
     )
     report = run_adapter(
         source=args.source,

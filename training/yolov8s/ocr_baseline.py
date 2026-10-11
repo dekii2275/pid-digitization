@@ -21,9 +21,7 @@ from typing import Any, Iterable, Iterator, Sequence
 
 import cv2
 import numpy as np
-
 from tiled_inference import generate_tiles, parse_page_numbers, read_image
-
 
 IMAGE_SUFFIXES = {".bmp", ".jpeg", ".jpg", ".png", ".tif", ".tiff", ".webp"}
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -247,7 +245,11 @@ def parse_paddle_result(result: Any) -> list[tuple[str, Sequence[Sequence[float]
             scores = payload.get("scores")
         scores = scores or []
         return [
-            (normalize_text(texts[index]), polygons[index], _safe_float(scores[index], 0.0) if index < len(scores) else 0.0)
+            (
+                normalize_text(texts[index]),
+                polygons[index],
+                _safe_float(scores[index], 0.0) if index < len(scores) else 0.0,
+            )
             for index in range(min(len(polygons), len(texts)))
             if normalize_text(texts[index])
         ]
@@ -337,7 +339,9 @@ def ocr_raster_image(
 def _pdf_page_image(page: Any, fitz_module: Any, dpi: int) -> np.ndarray:
     scale = dpi / 72.0
     pixmap = page.get_pixmap(matrix=fitz_module.Matrix(scale, scale), alpha=False)
-    rgb = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(pixmap.height, pixmap.width, pixmap.n)
+    rgb = np.frombuffer(pixmap.samples, dtype=np.uint8).reshape(
+        pixmap.height, pixmap.width, pixmap.n
+    )
     rgb = rgb[:, :, :3]
     return cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
 
@@ -373,12 +377,14 @@ def extract_pdf_text(page: Any, image: np.ndarray, scale: float) -> list[TextDet
     return detections
 
 
-def iter_pdf_pages(source: Path, dpi: int, pages: str) -> Iterator[tuple[int, Any, np.ndarray, float]]:
+def iter_pdf_pages(
+    source: Path, dpi: int, pages: str
+) -> Iterator[tuple[int, Any, np.ndarray, float]]:
     """Yield page number, PyMuPDF page, rendered BGR image, and point-to-pixel scale."""
 
     try:
         import pymupdf as fitz
-    except ImportError as exc:
+    except ImportError:
         try:
             import fitz
         except ImportError as fallback_exc:
@@ -435,16 +441,26 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Output directory. Defaults to artifacts/ocr-baseline/<source-stem>.",
     )
-    parser.add_argument("--dpi", type=int, default=300, help="PDF render DPI for overlays and OCR fallback.")
+    parser.add_argument(
+        "--dpi", type=int, default=300, help="PDF render DPI for overlays and OCR fallback."
+    )
     parser.add_argument(
         "--pages",
         default="all",
         help="PDF pages to process, for example: all, 1, or 1,3-5. Ignored for images.",
     )
-    parser.add_argument("--tile-size", type=int, default=2048, help="Raster OCR tile edge in source pixels.")
-    parser.add_argument("--overlap", type=float, default=0.20, help="Fractional overlap between OCR tiles.")
-    parser.add_argument("--min-confidence", type=float, default=0.0, help="Minimum recognition score to emit.")
-    parser.add_argument("--merge-iou", type=float, default=0.40, help="IoU threshold for duplicate tile boxes.")
+    parser.add_argument(
+        "--tile-size", type=int, default=2048, help="Raster OCR tile edge in source pixels."
+    )
+    parser.add_argument(
+        "--overlap", type=float, default=0.20, help="Fractional overlap between OCR tiles."
+    )
+    parser.add_argument(
+        "--min-confidence", type=float, default=0.0, help="Minimum recognition score to emit."
+    )
+    parser.add_argument(
+        "--merge-iou", type=float, default=0.40, help="IoU threshold for duplicate tile boxes."
+    )
     parser.add_argument(
         "--merge-overlap",
         type=float,
@@ -529,10 +545,14 @@ def run(args: argparse.Namespace) -> Path:
                 )
                 source_mode = "ocr"
             overlay_name = f"page-{page_number:03d}_overlay.png"
-            if not cv2.imwrite(str(destination / overlay_name), draw_text_overlay(image, detections)):
+            if not cv2.imwrite(
+                str(destination / overlay_name), draw_text_overlay(image, detections)
+            ):
                 raise RuntimeError(f"Could not write overlay: {destination / overlay_name}")
             page_results.append(
-                PageResult(page_number, image, tuple(detections), source_mode, tile_count, overlay_name)
+                PageResult(
+                    page_number, image, tuple(detections), source_mode, tile_count, overlay_name
+                )
             )
     else:
         image = read_image(args.source)
@@ -549,7 +569,9 @@ def run(args: argparse.Namespace) -> Path:
         overlay_name = "page-001_overlay.png"
         if not cv2.imwrite(str(destination / overlay_name), draw_text_overlay(image, detections)):
             raise RuntimeError(f"Could not write overlay: {destination / overlay_name}")
-        page_results.append(PageResult(1, image, tuple(detections), "ocr", tile_count, overlay_name))
+        page_results.append(
+            PageResult(1, image, tuple(detections), "ocr", tile_count, overlay_name)
+        )
 
     output = {
         "source": str(args.source.resolve()),

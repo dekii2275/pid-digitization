@@ -156,3 +156,20 @@ class TestAnnotations(unittest.TestCase):
         with zipfile.ZipFile(io.BytesIO(self.client.get(self.base + "/export").content)) as zipped:
             label = next(name for name in zipped.namelist() if name.startswith("labels/"))
             self.assertEqual(zipped.read(label), b"")
+
+    def test_labeled_filter_updates_after_save_clear_and_delete(self):
+        self.assertEqual(self.client.get("/api/v1/documents?labeled=true").json(), [])
+        self.client.put(self.base, json=self.body()).raise_for_status()
+        fixtures.web.drawings.clear()
+        labeled = self.client.get("/api/v1/documents?labeled=true").json()
+        self.assertEqual(len(labeled), 1)
+        self.assertEqual(labeled[0]["labeled_pages"], [1])
+        self.assertEqual(labeled[0]["annotation_count"], 2)
+        self.assertTrue(labeled[0]["is_labeled"])
+        self.assertEqual(self.client.get("/api/v1/documents?labeled=false").json(), [])
+        self.client.put(
+            self.base, json=dict(revision=1, symbols=[], texts=[], relations=[])
+        ).raise_for_status()
+        self.assertEqual(self.client.get("/api/v1/documents?labeled=true").json(), [])
+        self.client.delete(f"/api/v1/documents/{self.document['id']}").raise_for_status()
+        self.assertEqual(self.client.get(self.base).status_code, 404)

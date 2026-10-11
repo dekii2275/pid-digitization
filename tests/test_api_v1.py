@@ -4,14 +4,14 @@ from __future__ import annotations
 
 import io
 import sys
-from pathlib import Path
 import unittest
+from pathlib import Path
 
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-from PIL import Image
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 SRC_ROOT = REPO_ROOT / "src"
@@ -59,7 +59,9 @@ class TestApiV1(unittest.TestCase):
 
     def test_02_projects_api(self):
         # Create project
-        resp = self.client.post("/api/v1/projects", json={"name": "Refinery Unit 100", "description": "Main P&ID"})
+        resp = self.client.post(
+            "/api/v1/projects", json={"name": "Refinery Unit 100", "description": "Main P&ID"}
+        )
         self.assertEqual(resp.status_code, 200)
         project = resp.json()
         self.assertEqual(project["name"], "Refinery Unit 100")

@@ -1,4 +1,4 @@
-"""Drawing review API with a PostgreSQL symbol catalog and local AI pipeline."""
+"""Drawing review API with MinIO files, PostgreSQL metadata and a local AI pipeline."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import threading
@@ -18,9 +19,13 @@ from pathlib import Path
 import pypdfium2 as pdfium
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from minio.error import S3Error
 from PIL import Image, UnidentifiedImageError
+from psycopg import Error as DatabaseError
+from urllib3.exceptions import HTTPError as StorageConnectionError
 
+from app import document_storage
 from app.annotations import create_router as create_annotation_router
 from app.symbol_library import init_library
 from app.symbol_library import router as symbol_library_router
@@ -39,6 +44,8 @@ PIPELINE_DEVICE = os.getenv("PIPELINE_DEVICE", "cpu")
 PIPELINE_OCR_DEVICE = os.getenv("PIPELINE_OCR_DEVICE", "cpu")
 MAX_UPLOAD_BYTES = int(os.getenv("MAX_UPLOAD_BYTES", str(100 * 1024 * 1024)))
 TILE_SIZE = 512
+PDF_RENDER_DPI = 144
+PDF_MAX_RENDER_PIXELS = 16_000_000
 ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".pdf"}
 
 for directory in (APP_ROOT, PREVIEW_ROOT, TILE_ROOT, PIPELINE_ARTIFACTS_ROOT):
@@ -56,7 +63,17 @@ class DrawingRecord:
     height: int
     max_zoom: int
     created_at: str
+    bucket: str = ""
+    object_key: str = ""
+    byte_size: int = 0
+    sha256: str = ""
+    annotation_count: int = 0
+    labeled_pages: list[int] = field(default_factory=list)
+    last_labeled_at: str | None = None
     rendered_pages: dict[int, Path] = field(default_factory=dict)
+    # Old documents must keep their 144-DPI coordinate system after restart.
+    render_dpi: int = 144
+    render_max_pixels: int | None = None
 
 
 @dataclass
@@ -82,6 +99,7 @@ jobs_lock = threading.Lock()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_library()
+    document_storage.init_documents(APP_ROOT)
     yield
 
 
@@ -98,36 +116,63 @@ app.add_middleware(
 app.include_router(symbol_library_router)
 
 
+async def storage_unavailable(request, error):
+    return JSONResponse(
+        status_code=503, content={"detail": "Không thể kết nối kho bản vẽ. Vui lòng thử lại sau."}
+    )
+
+
+for error_type in (DatabaseError, S3Error, StorageConnectionError):
+    app.add_exception_handler(error_type, storage_unavailable)
+
+
+def record_from_metadata(data: dict) -> DrawingRecord:
+    return DrawingRecord(
+        source_path=APP_ROOT / f"{data['drawing_id']}{data['extension']}",
+        **{key: value for key, value in data.items() if key in DrawingRecord.__dataclass_fields__},
+    )
+
+
 def record_or_404(drawing_id: str) -> DrawingRecord:
-    record = drawings.get(drawing_id)
-    if not record and re.fullmatch(r"[a-f0-9]{32}", drawing_id):
-        metadata = APP_ROOT / f"{drawing_id}.json"
-        if metadata.is_file():
-            data = json.loads(metadata.read_text(encoding="utf-8"))
-            source_path = APP_ROOT / f"{drawing_id}{data['extension']}"
-            if source_path.is_file():
-                record = DrawingRecord(
-                    drawing_id=drawing_id,
-                    source_path=source_path,
-                    **{
-                        key: data[key]
-                        for key in (
-                            "original_name",
-                            "source_type",
-                            "page_count",
-                            "width",
-                            "height",
-                            "max_zoom",
-                            "created_at",
-                        )
-                    },
-                )
-                drawings[drawing_id] = record
-    if not record:
-        raise HTTPException(
-            404, "Drawing is not available. Upload it again after a service restart."
-        )
+    if not re.fullmatch(r"[a-f0-9]{32}", drawing_id):
+        raise HTTPException(404, "Không tìm thấy bản vẽ.")
+    data = document_storage.get_document(drawing_id)
+    if not data:
+        raise HTTPException(404, "Không tìm thấy bản vẽ.")
+    record = record_from_metadata(data)
+    drawings[drawing_id] = record
     return record
+
+
+def pdf_render_scale(page, dpi: int, max_pixels: int | None) -> float:
+    width, height = page.get_size()
+    if width <= 0 or height <= 0:
+        raise ValueError("Kích thước trang PDF không hợp lệ")
+    scale = dpi / 72
+    if max_pixels and math.ceil(width * scale) * math.ceil(height * scale) > max_pixels:
+        # PDFium rounds both dimensions up; include that rounding in the limit.
+        low, high = 0.0, scale
+        for _ in range(40):
+            middle = (low + high) / 2
+            if math.ceil(width * middle) * math.ceil(height * middle) <= max_pixels:
+                low = middle
+            else:
+                high = middle
+        scale = low
+    return scale
+
+
+def render_pdf_page(page, output: Path, dpi: int, max_pixels: int | None) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    scale = pdf_render_scale(page, dpi, max_pixels)
+    temporary = output.with_name(f"{output.stem}-{uuid.uuid4().hex}.tmp")
+    try:
+        with closing(page.render(scale=scale)) as bitmap:
+            with bitmap.to_pil().convert("RGB") as image:
+                image.save(temporary, "PNG", dpi=(scale * 72, scale * 72))
+        temporary.replace(output)
+    finally:
+        temporary.unlink(missing_ok=True)
 
 
 def page_image(record: DrawingRecord, page_number: int) -> Path:
@@ -137,18 +182,17 @@ def page_image(record: DrawingRecord, page_number: int) -> Path:
     if cached and cached.exists():
         return cached
     if record.source_type == "image":
-        return record.source_path
+        return document_storage.cache_source(vars(record), record.source_path)
 
     output = PREVIEW_ROOT / record.drawing_id / f"page-{page_number}.png"
-    output.parent.mkdir(parents=True, exist_ok=True)
     try:
-        with closing(pdfium.PdfDocument(str(record.source_path))) as pdf:
-            with closing(pdf[page_number - 1]) as page:
-                bitmap = page.render(scale=2.0)
-                try:
-                    bitmap.to_pil().convert("RGB").save(output, "PNG", optimize=True)
-                finally:
-                    bitmap.close()
+        if not output.exists():
+            document_storage.cache_source(vars(record), record.source_path)
+            with closing(pdfium.PdfDocument(str(record.source_path))) as pdf:
+                with closing(pdf[page_number - 1]) as page:
+                    render_pdf_page(page, output, record.render_dpi, record.render_max_pixels)
+    except (HTTPException, DatabaseError, S3Error, StorageConnectionError):
+        raise
     except Exception as error:  # pragma: no cover - defensive response for malformed PDFs
         raise HTTPException(422, f"Không thể render trang PDF: {error}") from error
     record.rendered_pages[page_number] = output
@@ -161,6 +205,7 @@ def drawing_payload(record: DrawingRecord) -> dict:
         "id": record.drawing_id,
         "name": record.original_name,
         "source_type": record.source_type,
+        "render_dpi": record.render_dpi if record.source_type == "pdf" else None,
         "page_count": record.page_count,
         "page_number": 1,
         "width": record.width,
@@ -170,25 +215,24 @@ def drawing_payload(record: DrawingRecord) -> dict:
         "preview_url": f"{base}/preview.jpg",
         "tile_url_template": f"{base}/tiles/{{z}}/{{x}}/{{y}}.png",
         "created_at": record.created_at,
+        "byte_size": record.byte_size,
+        "file_path": f"s3://{record.bucket}/{record.object_key}",
+        "original_url": f"/api/v1/documents/{record.drawing_id}/original",
+        "is_labeled": record.annotation_count > 0,
+        "annotation_count": record.annotation_count,
+        "labeled_pages": record.labeled_pages,
+        "last_labeled_at": record.last_labeled_at,
     }
 
 
-app.include_router(
-    create_annotation_router(record_or_404, page_image, lambda: APP_ROOT / "annotations")
-)
+app.include_router(create_annotation_router(record_or_404, page_image, repository=document_storage))
 
 
 @app.get("/api/v1/documents")
-def list_documents() -> list[dict]:
-    for metadata in APP_ROOT.glob("*.json"):
-        if re.fullmatch(r"[a-f0-9]{32}", metadata.stem):
-            try:
-                record_or_404(metadata.stem)
-            except (HTTPException, ValueError, KeyError):
-                continue
+def list_documents(labeled: bool | None = None) -> list[dict]:
     return [
-        drawing_payload(record)
-        for record in sorted(drawings.values(), key=lambda item: item.created_at, reverse=True)
+        drawing_payload(record_from_metadata(data))
+        for data in document_storage.list_documents(labeled)
     ]
 
 
@@ -219,7 +263,11 @@ def save_preview(source: Path, destination: Path) -> None:
 
 @app.get("/health")
 def health() -> dict:
-    return {"status": "ok", "storage": "file-metadata"}
+    with document_storage.connection() as db:
+        db.execute("SELECT 1 FROM drawing_documents LIMIT 1")
+    if not document_storage.client().bucket_exists(os.getenv("MINIO_BUCKET", "pid-drawings")):
+        raise HTTPException(503, "Kho bản vẽ chưa sẵn sàng.")
+    return {"status": "ok", "storage": "minio", "metadata": "postgresql"}
 
 
 @app.post("/api/v1/documents/upload", status_code=201)
@@ -244,17 +292,12 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
 
         if extension == ".pdf":
             rendered = PREVIEW_ROOT / drawing_id / "page-1.png"
-            rendered.parent.mkdir(parents=True, exist_ok=True)
             with closing(pdfium.PdfDocument(str(source_path))) as pdf:
                 page_count = len(pdf)
                 if page_count == 0:
                     raise ValueError("PDF không có trang")
                 with closing(pdf[0]) as page:
-                    bitmap = page.render(scale=2.0)
-                    try:
-                        bitmap.to_pil().convert("RGB").save(rendered, "PNG", optimize=True)
-                    finally:
-                        bitmap.close()
+                    render_pdf_page(page, rendered, PDF_RENDER_DPI, PDF_MAX_RENDER_PIXELS)
             with Image.open(rendered) as image:
                 width, height = image.size
             source_type = "pdf"
@@ -281,45 +324,74 @@ async def upload_document(file: UploadFile = File(...)) -> dict:
             max_zoom=max_zoom,
             created_at=datetime.now(timezone.utc).isoformat(),
             rendered_pages=rendered_pages,
+            render_dpi=PDF_RENDER_DPI if source_type == "pdf" else 144,
+            render_max_pixels=PDF_MAX_RENDER_PIXELS if source_type == "pdf" else None,
         )
         preview_path = PREVIEW_ROOT / drawing_id / "preview.jpg"
         save_preview(page_image(record, 1), preview_path)
-        (APP_ROOT / f"{drawing_id}.json").write_text(
-            json.dumps(
-                {
-                    "extension": extension,
-                    **{
-                        key: getattr(record, key)
-                        for key in (
-                            "original_name",
-                            "source_type",
-                            "page_count",
-                            "width",
-                            "height",
-                            "max_zoom",
-                            "created_at",
-                        )
-                    },
-                },
-                ensure_ascii=False,
-            ),
-            encoding="utf-8",
-        )
+        metadata = {
+            "extension": extension,
+            **{
+                key: getattr(record, key)
+                for key in (
+                    "original_name",
+                    "source_type",
+                    "page_count",
+                    "width",
+                    "height",
+                    "max_zoom",
+                    "created_at",
+                    "render_dpi",
+                    "render_max_pixels",
+                )
+            },
+        }
+        stored = document_storage.save_source(drawing_id, source_path, metadata)
+        record = record_from_metadata(stored)
+        source_path.unlink(missing_ok=True)
         drawings[drawing_id] = record
         return drawing_payload(record)
-    except HTTPException:
-        source_path.unlink(missing_ok=True)
-        raise
     except (UnidentifiedImageError, ValueError, RuntimeError) as error:
-        source_path.unlink(missing_ok=True)
         raise HTTPException(422, f"Không thể đọc bản vẽ: {error}") from error
     finally:
+        source_path.unlink(missing_ok=True)
+        if drawing_id not in drawings:
+            shutil.rmtree(PREVIEW_ROOT / drawing_id, ignore_errors=True)
         await file.close()
 
 
 @app.get("/api/v1/documents/{drawing_id}")
 def get_document(drawing_id: str) -> dict:
     return drawing_payload(record_or_404(drawing_id))
+
+
+@app.get("/api/v1/documents/{drawing_id}/original")
+def get_original(drawing_id: str) -> FileResponse:
+    record = record_or_404(drawing_id)
+    path = document_storage.cache_source(vars(record), record.source_path)
+    return FileResponse(path, filename=record.original_name)
+
+
+@app.delete("/api/v1/documents/{drawing_id}")
+def delete_document(drawing_id: str) -> dict:
+    record = record_or_404(drawing_id)
+    with jobs_lock:
+        if any(
+            job.drawing_id == drawing_id and job.status in {"QUEUED", "RUNNING"}
+            for job in jobs.values()
+        ):
+            raise HTTPException(
+                409, "Bản vẽ đang được xử lý. Hãy đợi pipeline hoàn tất trước khi xóa."
+            )
+        document_storage.delete_document(drawing_id)
+        for job_id in [key for key, job in jobs.items() if job.drawing_id == drawing_id]:
+            del jobs[job_id]
+    drawings.pop(drawing_id, None)
+    record.source_path.unlink(missing_ok=True)
+    (APP_ROOT / f"{drawing_id}.json").unlink(missing_ok=True)
+    for root in (PREVIEW_ROOT, TILE_ROOT, PIPELINE_ARTIFACTS_ROOT, APP_ROOT / "annotations"):
+        shutil.rmtree(root / drawing_id, ignore_errors=True)
+    return {"deleted": drawing_id}
 
 
 def job_payload(job: PipelineJob) -> dict:
@@ -377,7 +449,7 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
     try:
         if not PIPELINE_WEIGHTS.is_file():
             raise FileNotFoundError(f"Không tìm thấy trọng số detector: {PIPELINE_WEIGHTS}")
-        source = page_image(drawing, 1) if drawing.source_type == "pdf" else drawing.source_path
+        source = page_image(drawing, 1)
         script = REPO_ROOT / "training/yolov8s/run_pid_pipeline.py"
         if not script.is_file():
             raise FileNotFoundError("Không tìm thấy script pipeline trong container.")
@@ -432,9 +504,9 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
 
 @app.post("/api/v1/documents/{drawing_id}/run-all", status_code=202)
 def run_all(drawing_id: str) -> dict:
-    drawing = record_or_404(drawing_id)
-    job = PipelineJob(job_id=f"job_{uuid.uuid4().hex[:12]}", drawing_id=drawing_id)
     with jobs_lock:
+        drawing = record_or_404(drawing_id)
+        job = PipelineJob(job_id=f"job_{uuid.uuid4().hex[:12]}", drawing_id=drawing_id)
         jobs[job.job_id] = job
     threading.Thread(target=run_pipeline_job, args=(job, drawing), daemon=True).start()
     return job_payload(job)
@@ -546,7 +618,7 @@ def get_tile(
         right = min(left + TILE_SIZE * scale_down, width)
         bottom = min(top + TILE_SIZE * scale_down, height)
         with Image.open(image_path) as image:
-            tile = image.convert("RGB").crop((left, top, right, bottom))
+            tile = image.crop((left, top, right, bottom)).convert("RGB")
             if scale_down > 1:
                 tile = tile.resize(
                     (math.ceil(tile.width / scale_down), math.ceil(tile.height / scale_down)),

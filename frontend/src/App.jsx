@@ -22,6 +22,7 @@ import { downloadSceneFile } from './components/EditablePidWorkspace';
 import SymbolLabelManager from './components/SymbolLabelManager';
 import SymbolLabelTabs from './components/SymbolLabelTabs';
 import GenerateDataWorkspace from './components/GenerateDataWorkspace';
+import DataWorkspace from './components/DataWorkspace';
 import {
   getPipelineJob,
   getPipelineResults,
@@ -189,7 +190,7 @@ export default function App() {
   });
   const [selectedSymbol, setSelectedSymbol] = useState(symbols[0]);
   const [inspectorTab, setInspectorTab] = useState('properties');
-  const [ribbonTab, setRibbonTab] = useState('Home');
+  const [ribbonTab, setRibbonTab] = useState('Data');
   const [symbolLabelTab, setSymbolLabelTab] = useState('manage');
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -231,8 +232,12 @@ export default function App() {
   };
   const acceptAnnotationDrawing = useCallback((uploaded) => {
     setUploadedDrawing(uploaded);
-    setFileName(uploaded.name);
-    setActiveDrawing({ id: 'LOCAL', name: uploaded.name, revision: 'Local' });
+    setFileName(uploaded?.name || 'Chưa có bản vẽ');
+    setActiveDrawing({
+      id: uploaded?.id || 'Chưa có bản vẽ',
+      name: uploaded?.name || 'Chưa có bản vẽ',
+      revision: '—',
+    });
     setAiResults(null);
     setCompletedJobId(null);
     setShowDetections(false);
@@ -242,12 +247,16 @@ export default function App() {
   const chooseFile = async (file) => {
     if (!file || isUploading) return;
     setIsUploading(true);
-    notify(`Đang tải ${file.name} lên và tạo preview…`);
+    notify(
+      file.name.toLowerCase().endsWith('.pdf')
+        ? `Đang tải ${file.name} và chuyển PDF sang ảnh PNG độ nét cao…`
+        : `Đang tải ${file.name} và chuẩn bị ảnh ở độ phân giải gốc…`,
+    );
     try {
       const uploaded = await uploadDrawingDocument(file);
       setUploadedDrawing(uploaded);
       setFileName(uploaded.name);
-      setActiveDrawing({ id: 'LOCAL', name: uploaded.name, revision: 'Local' });
+      setActiveDrawing({ id: uploaded.id, name: uploaded.name, revision: '—' });
       setAiResults(null);
       setCompletedJobId(null);
       setShowDetections(false);
@@ -365,12 +374,6 @@ export default function App() {
   };
   const paletteSelect = (name) =>
     notify(`Đã chọn nhóm symbol “${name}”. API placement sẽ được nối sau.`);
-  const newDrawing = () => {
-    setActiveDrawing({ id: 'PID-NEW', name: 'PID-NEW · Untitled', revision: 'Draft' });
-    setUploadedDrawing(null);
-    setFileName('PID-NEW.png');
-    notify('Đã tạo bản vẽ mock mới.');
-  };
   const toggleFullscreen = async () => {
     try {
       if (document.fullscreenElement) await document.exitFullscreen();
@@ -398,16 +401,34 @@ export default function App() {
           <em>Project: Unit 100</em>
         </div>
         <div className="drawing-tabs">
-          <button className="drawing-tab active">
-            <FileText size={14} /> {activeDrawing.id}
+          <button className="drawing-tab active" title={fileName}>
+            <FileText size={14} /> <span>{fileName}</span>
           </button>
-          <button className="drawing-tab" onClick={newDrawing}>
+          <button
+            className="drawing-tab"
+            disabled={isUploading}
+            onClick={() => {
+              setRibbonTab('Data');
+              document.getElementById('header-drawing-upload').click();
+            }}
+          >
             + New
           </button>
+          <input
+            id="header-drawing-upload"
+            aria-label="Tải bản vẽ từ header"
+            type="file"
+            accept=".pdf,application/pdf"
+            hidden
+            onChange={(event) => {
+              chooseFile(event.target.files?.[0]);
+              event.target.value = '';
+            }}
+          />
         </div>
         <div className="title-actions">
           <span>
-            <i /> Local demo
+            <i /> Workspace
           </span>
           <button onClick={() => downloadFile('JSON')}>
             <Download size={14} /> Export
@@ -415,10 +436,10 @@ export default function App() {
         </div>
       </header>
       <section
-        className={`ribbon ${ribbonTab === 'Nhãn symbol' || ribbonTab === 'Generate data' ? 'ribbon--symbols' : ''}`}
+        className={`ribbon ${['Nhãn symbol', 'Generate data', 'Data'].includes(ribbonTab) ? 'ribbon--symbols' : ''}`}
       >
         <div className="ribbon-tabs">
-          {['Home', 'Review', 'Generate data', 'Data', 'View', 'Nhãn symbol'].map((tab) => (
+          {['Home', 'Review', 'Generate data', 'Data', 'Nhãn symbol'].map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -433,7 +454,7 @@ export default function App() {
         </div>
         {ribbonTab === 'Nhãn symbol' ? (
           <SymbolLabelTabs activeTab={symbolLabelTab} onChange={setSymbolLabelTab} />
-        ) : ribbonTab === 'Generate data' ? null : (
+        ) : ribbonTab === 'Generate data' || ribbonTab === 'Data' ? null : (
           <div className="ribbon-tools">
             <div className="tool-group">
               <RibbonButton
@@ -530,7 +551,18 @@ export default function App() {
         isUploading={isUploading}
         hidden={ribbonTab !== 'Generate data'}
       />
-      {ribbonTab === 'Generate data' ? null : ribbonTab === 'Nhãn symbol' ? (
+      {ribbonTab === 'Data' ? (
+        <DataWorkspace
+          drawing={uploadedDrawing}
+          onDrawingChange={acceptAnnotationDrawing}
+          onUpload={chooseFile}
+          isUploading={isUploading}
+          onAnnotate={(drawing) => {
+            acceptAnnotationDrawing(drawing);
+            setRibbonTab('Generate data');
+          }}
+        />
+      ) : ribbonTab === 'Generate data' ? null : ribbonTab === 'Nhãn symbol' ? (
         <SymbolLabelManager activeTab={symbolLabelTab} />
       ) : ribbonTab === 'Review' ? (
         <ReviewWorkspace

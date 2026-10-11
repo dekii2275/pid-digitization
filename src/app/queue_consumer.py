@@ -1,9 +1,10 @@
 # Copyright (c) Microsoft Corporation.
 # Licensed under the MIT license.
-from queue import Queue
-import threading
-import logger_config
 import signal
+import threading
+from queue import Queue
+
+import logger_config
 
 logger = logger_config.get_logger(__name__)
 
@@ -32,7 +33,7 @@ def consumer_worker():
     """
     This is the worker thread function to process the job submitted to the queue
     """
-    while (not _kill_now):
+    while not _kill_now:
         logger.info("Waiting for queue")
         (func, args) = _queue.get()
         logger.info(f"Got a job from queue: {func.__name__}: {args}")

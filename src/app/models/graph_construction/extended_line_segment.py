@@ -7,4 +7,5 @@ class ExtendedLineSegment(LineSegment):
     """
     This class represents the line segment extension
     """
+
     slope: float

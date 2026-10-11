@@ -2,19 +2,23 @@
 # Licensed under the MIT license.
 import cv2
 import numpy as np
-from app.services.base_image_preprocessor import to_grayscale, to_binary
+
 from app.models.bounding_box import BoundingBox
+from app.services.base_image_preprocessor import to_binary, to_grayscale
 
 
 class LineDetectionImagePreprocessor:
-    '''
+    """
     Helper class to perform preprocessing on an image.
-    '''
+    """
+
     @staticmethod
-    def preprocess(image_bytes: bytes,
-                   symbol_bounding_boxes: list[BoundingBox],
-                   text_bounding_boxes: list[BoundingBox]):
-        '''
+    def preprocess(
+        image_bytes: bytes,
+        symbol_bounding_boxes: list[BoundingBox],
+        text_bounding_boxes: list[BoundingBox],
+    ):
+        """
         Preprocesses the given image bytes. Applies the following transformations:
         1. Clears symbol bounding boxes
         2. Clears text bounding boxes
@@ -29,7 +33,7 @@ class LineDetectionImagePreprocessor:
         :type text_bounding_boxes: list
         :return: The preprocessed image bytes
         :rtype: bytes
-        '''
+        """
         # convert image bytes to cv2 image
         image = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
 
@@ -50,14 +54,14 @@ class LineDetectionImagePreprocessor:
 
     @staticmethod
     def clear_bounding_boxes(image, bounding_boxes: list[BoundingBox]):
-        '''
+        """
         Clears the given bounding boxes from the image.
         :param image: The image to clear the bounding boxes from
         :type image: np.ndarray
         :param bounding_boxes: The bounding boxes to clear
         :type bounding_boxes: list[BoundingBox]
         :return: The image with the bounding boxes cleared
-        '''
+        """
 
         # Compute the histogram of the image
         hist = cv2.calcHist([image], [0], None, [256], [0, 256])
@@ -66,19 +70,23 @@ class LineDetectionImagePreprocessor:
         background_value = int(np.argmax(hist))
 
         for bb in bounding_boxes:
-            points = np.array([[bb.bottomX, bb.topY],
-                              [bb.bottomX, bb.bottomY],
-                              [bb.topX, bb.bottomY],
-                              [bb.topX, bb.topY]],
-                              np.int32)
+            points = np.array(
+                [
+                    [bb.bottomX, bb.topY],
+                    [bb.bottomX, bb.bottomY],
+                    [bb.topX, bb.bottomY],
+                    [bb.topX, bb.topY],
+                ],
+                np.int32,
+            )
             cv2.fillPoly(image, [points], (background_value, background_value, background_value))
 
         return image
 
     @staticmethod
     def apply_thinning(image):
-        '''
+        """
         Applies the Zhang-Suen thinning algorithm to the given image.
-        :param image: The image to apply the thinning algorithm to'''
+        :param image: The image to apply the thinning algorithm to"""
         thinningType = cv2.ximgproc.THINNING_ZHANGSUEN
         return cv2.ximgproc.thinning(image, thinningType=thinningType)

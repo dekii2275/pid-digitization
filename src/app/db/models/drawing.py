@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
+
+from sqlalchemy import Column, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
@@ -13,7 +14,9 @@ class Drawing(Base):
     __tablename__ = "drawings"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    project_id = Column(Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True)
+    project_id = Column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     name = Column(String(255), nullable=False, index=True)
     original_filename = Column(String(255), nullable=False)
     file_path = Column(String(1024), nullable=False)
@@ -32,7 +35,9 @@ class Drawing(Base):
     symbols = relationship("DetectedSymbol", back_populates="drawing", cascade="all, delete-orphan")
     ocr_texts = relationship("OcrText", back_populates="drawing", cascade="all, delete-orphan")
     lines = relationship("DetectedLine", back_populates="drawing", cascade="all, delete-orphan")
-    relationships = relationship("Relationship", back_populates="drawing", cascade="all, delete-orphan")
+    relationships = relationship(
+        "Relationship", back_populates="drawing", cascade="all, delete-orphan"
+    )
     jobs = relationship("ProcessingJob", back_populates="drawing", cascade="all, delete-orphan")
     revisions = relationship("Revision", back_populates="drawing", cascade="all, delete-orphan")
     audit_logs = relationship("AuditLog", back_populates="drawing", cascade="all, delete-orphan")
@@ -43,7 +48,9 @@ class DrawingPage(Base):
     __tablename__ = "drawing_pages"
 
     id = Column(Integer, primary_key=True, index=True, autoincrement=True)
-    drawing_id = Column(Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True)
+    drawing_id = Column(
+        Integer, ForeignKey("drawings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     page_number = Column(Integer, nullable=False, default=1)
     width = Column(Integer, nullable=False)
     height = Column(Integer, nullable=False)
