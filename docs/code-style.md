@@ -54,6 +54,7 @@ backend container used for development/testing:
 docker compose exec -T backend pip install -r src/requirements.test.txt
 docker compose exec -T backend python -m unittest discover -s tests -p 'test_annotations.py' -v
 docker compose exec -T backend python -m unittest discover -s tests -p 'test_web_main.py' -v
+docker compose exec -T backend python -m unittest discover -s tests -p 'test_data_management.py' -v
 docker compose exec -T -e SYMBOL_TEST_DATABASE=1 backend python -m unittest discover -s tests -p 'test_symbol_library.py' -v
 docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_document_storage.py' -v
 python scripts/smoke_data.py

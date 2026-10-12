@@ -42,6 +42,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     drawMode = null,
     onZoomChange,
     panOnly = false,
+    centerOnResize = false,
     viewerHint,
     onEditStart,
     onEditEnd,
@@ -53,6 +54,8 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
   const editRef = useRef(null);
   const createRef = useRef(null);
   const fittedDrawingRef = useRef(null);
+  const previousSizeRef = useRef(null);
+  const autoFitRef = useRef(true);
   const [viewport, setViewport] = useState({ width: 0, height: 0 });
   const [view, setView] = useState({ scale: 1, x: 0, y: 0 });
   const [draftBox, setDraftBox] = useState(null);
@@ -62,6 +65,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     if (!container) return;
     const { width, height } = container.getBoundingClientRect();
     if (!width || !height) return;
+    autoFitRef.current = true;
     const scale = Math.min(width / drawing.width, height / drawing.height) * 0.92;
     setView({
       scale,
@@ -73,12 +77,33 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return undefined;
-    const observer = new ResizeObserver(([entry]) =>
-      setViewport({ width: entry.contentRect.width, height: entry.contentRect.height }),
-    );
+    const observer = new ResizeObserver(([entry]) => {
+      const size = { width: entry.contentRect.width, height: entry.contentRect.height };
+      const previous = previousSizeRef.current;
+      if (size.width && size.height) {
+        if (centerOnResize && previous) {
+          if (autoFitRef.current) {
+            const scale = Math.min(size.width / drawing.width, size.height / drawing.height) * 0.92;
+            setView({
+              scale,
+              x: (size.width - drawing.width * scale) / 2,
+              y: (size.height - drawing.height * scale) / 2,
+            });
+          } else {
+            setView((current) => ({
+              ...current,
+              x: current.x + (size.width - previous.width) / 2,
+              y: current.y + (size.height - previous.height) / 2,
+            }));
+          }
+        }
+        previousSizeRef.current = size;
+      }
+      setViewport(size);
+    });
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [centerOnResize, drawing.width, drawing.height]);
   useEffect(() => {
     const drawingKey = `${drawing.id}-${drawing.page_number || 1}`;
     if (!viewport.width || !viewport.height || fittedDrawingRef.current === drawingKey) return;
@@ -92,6 +117,7 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
   const zoomAt = (nextScale, clientX, clientY) => {
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return;
+    autoFitRef.current = false;
     const targetScale = clamp(nextScale, 0.03, 8);
     const pointerX = clientX - rect.left;
     const pointerY = clientY - rect.top;
@@ -312,12 +338,14 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
         }
         if (moveEditedItem(event)) return;
         const drag = dragRef.current;
-        if (drag?.pointerId === event.pointerId)
+        if (drag?.pointerId === event.pointerId) {
+          if (event.clientX !== drag.x || event.clientY !== drag.y) autoFitRef.current = false;
           setView({
             ...drag.view,
             x: drag.view.x + event.clientX - drag.x,
             y: drag.view.y + event.clientY - drag.y,
           });
+        }
       }}
       onPointerUp={(event) => {
         if (editRef.current?.pointerId === event.pointerId) {

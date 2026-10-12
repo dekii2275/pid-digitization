@@ -6,7 +6,9 @@ detector at `models/symbol-detector/best.pt` is tracked for fresh-clone inferenc
 
 ```text
 digitization-of-piping-and-instrument-diagrams/
-├── src/                    FastAPI application, graph code, SQL graph model, and tests
+├── src/                    FastAPI application, graph code, SQL graph model, and legacy tests
+├── frontend/               React UI, shared components and API services
+├── tests/                  Web API, annotation, storage and pipeline regressions
 ├── training/
 │   └── yolov8s/            Symbol-detector train and preview tools
 ├── scripts/                Reproducible local setup commands
@@ -14,6 +16,8 @@ digitization-of-piping-and-instrument-diagrams/
 ├── models/                 Bundled detector plus optional ignored local weights
 ├── artifacts/              Training runs and previews only; ignored by Git
 ├── docs/                   Architecture, API, and project documentation
+├── docker/                 Runtime Dockerfiles and Nginx configuration
+├── alembic/                Database migration scripts
 ├── .devcontainer/          API development container and SQL Server setup
 └── .github/                Repository automation templates
 ```

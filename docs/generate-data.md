@@ -27,6 +27,11 @@ pipeline AI. Kết quả Review/pipeline được giữ riêng.
    tọa độ/kích thước. Bấm **×** hoặc Esc để đóng; bấm vùng khác để đổi nội dung.
 5. Bấm **Lưu nhãn** hoặc **Xuất dataset**. Xuất sẽ lưu trước rồi tải ZIP.
 
+Dòng **Trạng thái trang** cho phép chọn Chưa làm, Đang làm, Chờ kiểm tra hoặc
+Hoàn tất sau khi lưu nhãn; bên cạnh hiển thị số trang hoàn tất của bản vẽ.
+Trạng thái không phụ thuộc số symbol/OCR: trang âm tính đã kiểm tra vẫn đánh
+dấu Hoàn tất được. Khi sửa và lưu nội dung nhãn, trạng thái trở về Đang làm.
+
 Lăn chuột để zoom; kéo nền hoặc chọn **Di chuyển ảnh** để pan. Các thao tác
 luôn dùng tọa độ pixel của ảnh gốc, không dùng tọa độ ảnh thu nhỏ trên màn hình.
 **Hoàn tác/Làm lại** giữ tối đa 50 thao tác; Ctrl/Cmd+Z để hoàn tác,

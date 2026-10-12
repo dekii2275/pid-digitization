@@ -103,6 +103,83 @@ class TestDocumentStorage(unittest.TestCase):
         self.assertIsNone(storage.get_document(id_))
         self.assertEqual(list(storage.client().list_objects(self.bucket, recursive=True)), [])
 
+    def test_workflow_and_organization_survive_saves_conflicts_restart_and_delete(self):
+        id_, path, metadata = self.source()
+        storage.save_source(id_, path, metadata)
+        storage.update_document(id_, dict(project="Nhà máy A", drawing_set="P&ID", tags=["scan"]))
+        for revision, status in enumerate(("in_progress", "pending_review", "completed")):
+            storage.save_page_status(id_, 2, status, revision, 0)
+        completed = storage.get_document(id_)
+        self.assertEqual(completed["completed_page_count"], 1)
+        self.assertEqual(completed["annotation_count"], 0)
+        with self.assertRaises(HTTPException) as conflict:
+            storage.save_page_status(id_, 2, "not_started", 0, 0)
+        self.assertEqual(conflict.exception.status_code, 409)
+        storage.init_documents(self.root)
+        self.assertEqual(storage.get_document(id_), completed)
+        annotation = dict(
+            revision=1,
+            saved_at=datetime.now(timezone.utc).isoformat(),
+            symbols=[],
+            texts=[],
+            relations=[],
+        )
+        storage.save_annotation(id_, 2, annotation, 0)
+        document = storage.get_document(id_)
+        self.assertEqual(document["completed_page_count"], 1)
+        self.assertEqual(document["page_workflows"]["2"]["status"], "completed")
+        workflow = document["page_workflows"]["2"]
+        self.assertEqual(workflow["annotation_revision"], 1)
+        storage.save_page_status(id_, 2, "completed", workflow["revision"], 1)
+        annotation.update(revision=2, saved_at=datetime.now(timezone.utc).isoformat())
+        storage.save_annotation(id_, 2, annotation, 1)
+        self.assertEqual(storage.get_document(id_)["completed_page_count"], 1)
+        with self.assertRaises(HTTPException) as stale:
+            storage.save_page_status(id_, 2, "in_progress", workflow["revision"] + 1, 1)
+        self.assertEqual(stale.exception.status_code, 409)
+        annotation.update(
+            revision=3,
+            saved_at=datetime.now(timezone.utc).isoformat(),
+            texts=[dict(id="t1", text="P-101")],
+        )
+        storage.save_annotation(id_, 2, annotation, 2)
+        document = storage.get_document(id_)
+        self.assertEqual(document["completed_page_count"], 0)
+        self.assertEqual(document["project"], "Nhà máy A")
+        self.assertEqual(document["tags"], ["scan"])
+        storage.delete_document(id_)
+        self.assertIsNone(storage.get_document(id_))
+
+    def test_old_annotation_metadata_gets_in_progress_summary_and_validates_pages(self):
+        id_, path, metadata = self.source()
+        storage.save_source(id_, path, metadata)
+        annotation = dict(
+            revision=1,
+            saved_at=datetime.now(timezone.utc).isoformat(),
+            symbols=[],
+            texts=[],
+            relations=[],
+        )
+        with self.connection() as db:
+            from psycopg.types.json import Jsonb
+
+            db.execute(
+                "INSERT INTO drawing_annotations VALUES (%s, %s, %s, %s)",
+                (id_, 1, Jsonb(annotation), annotation["saved_at"]),
+            )
+        document = storage.get_document(id_)
+        self.assertEqual(document["page_workflows"]["1"]["status"], "in_progress")
+        self.assertEqual(document["completed_page_count"], 0)
+        for page, status, expected in (
+            (0, "completed", 404),
+            (3, "completed", 404),
+            (1, "unknown", 422),
+        ):
+            with self.subTest(page=page, status=status):
+                with self.assertRaises(HTTPException) as error:
+                    storage.save_page_status(id_, page, status, 0, 0)
+                self.assertEqual(error.exception.status_code, expected)
+
     def test_failed_minio_delete_preserves_metadata_and_annotations(self):
         id_, path, metadata = self.source()
         storage.save_source(id_, path, metadata)

@@ -551,18 +551,18 @@ export default function App() {
         isUploading={isUploading}
         hidden={ribbonTab !== 'Generate data'}
       />
-      {ribbonTab === 'Data' ? (
-        <DataWorkspace
-          drawing={uploadedDrawing}
-          onDrawingChange={acceptAnnotationDrawing}
-          onUpload={chooseFile}
-          isUploading={isUploading}
-          onAnnotate={(drawing) => {
-            acceptAnnotationDrawing(drawing);
-            setRibbonTab('Generate data');
-          }}
-        />
-      ) : ribbonTab === 'Generate data' ? null : ribbonTab === 'Nhãn symbol' ? (
+      <DataWorkspace
+        drawing={uploadedDrawing}
+        onDrawingChange={acceptAnnotationDrawing}
+        isUploading={isUploading}
+        hidden={ribbonTab !== 'Data'}
+        onAnnotate={(drawing) => {
+          acceptAnnotationDrawing(drawing);
+          setRibbonTab('Generate data');
+        }}
+      />
+      {ribbonTab === 'Data' || ribbonTab === 'Generate data' ? null : ribbonTab ===
+        'Nhãn symbol' ? (
         <SymbolLabelManager activeTab={symbolLabelTab} />
       ) : ribbonTab === 'Review' ? (
         <ReviewWorkspace

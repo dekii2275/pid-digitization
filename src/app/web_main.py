@@ -15,6 +15,7 @@ from contextlib import asynccontextmanager, closing
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Literal
 
 import pypdfium2 as pdfium
 from fastapi import Body, FastAPI, File, HTTPException, UploadFile
@@ -23,6 +24,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from minio.error import S3Error
 from PIL import Image, UnidentifiedImageError
 from psycopg import Error as DatabaseError
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from urllib3.exceptions import HTTPError as StorageConnectionError
 
 from app import document_storage
@@ -70,6 +72,12 @@ class DrawingRecord:
     annotation_count: int = 0
     labeled_pages: list[int] = field(default_factory=list)
     last_labeled_at: str | None = None
+    project: str = ""
+    drawing_set: str = ""
+    tags: list[str] = field(default_factory=list)
+    updated_at: str | None = None
+    page_workflows: dict = field(default_factory=dict)
+    completed_page_count: int = 0
     rendered_pages: dict[int, Path] = field(default_factory=dict)
     # Old documents must keep their 144-DPI coordinate system after restart.
     render_dpi: int = 144
@@ -222,6 +230,12 @@ def drawing_payload(record: DrawingRecord) -> dict:
         "annotation_count": record.annotation_count,
         "labeled_pages": record.labeled_pages,
         "last_labeled_at": record.last_labeled_at,
+        "project": record.project,
+        "drawing_set": record.drawing_set,
+        "tags": record.tags,
+        "updated_at": record.updated_at or record.created_at,
+        "page_workflows": record.page_workflows,
+        "completed_page_count": record.completed_page_count,
     }
 
 
@@ -234,6 +248,84 @@ def list_documents(labeled: bool | None = None) -> list[dict]:
         drawing_payload(record_from_metadata(data))
         for data in document_storage.list_documents(labeled)
     ]
+
+
+class DocumentOrganizationRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    project: str = Field(max_length=120)
+    drawing_set: str = Field(max_length=120)
+    tags: list[str] = Field(max_length=30)
+
+    @field_validator("project", "drawing_set")
+    @classmethod
+    def trim_name(cls, value):
+        return value.strip()
+
+    @field_validator("tags")
+    @classmethod
+    def normalize_tags(cls, values):
+        result = []
+        for value in values:
+            tag = value.strip()
+            if not tag or len(tag) > 60:
+                raise ValueError("Tag phải có từ 1 đến 60 ký tự.")
+            if tag.casefold() not in {item.casefold() for item in result}:
+                result.append(tag)
+        return result
+
+
+class PageStatusRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: Literal["not_started", "in_progress", "pending_review", "completed"]
+    revision: int = Field(ge=0)
+    annotation_revision: int = Field(ge=0)
+
+
+@app.patch("/api/v1/documents/{drawing_id}")
+def organize_document(drawing_id: str, request: DocumentOrganizationRequest) -> dict:
+    record_or_404(drawing_id)
+    document_storage.update_document(drawing_id, request.model_dump())
+    return drawing_payload(record_or_404(drawing_id))
+
+
+@app.put("/api/v1/documents/{drawing_id}/pages/{page_number}/status")
+def update_page_status(drawing_id: str, page_number: int, request: PageStatusRequest) -> dict:
+    record_or_404(drawing_id)
+    document_storage.save_page_status(
+        drawing_id, page_number, request.status, request.revision, request.annotation_revision
+    )
+    return drawing_payload(record_or_404(drawing_id))
+
+
+@app.get("/api/v1/documents/{drawing_id}/pages/{page_number}/thumbnail.jpg")
+def get_page_thumbnail(drawing_id: str, page_number: int) -> FileResponse:
+    record = record_or_404(drawing_id)
+    if not 1 <= page_number <= record.page_count:
+        raise HTTPException(404, "Trang không thuộc bản vẽ.")
+    output = PREVIEW_ROOT / drawing_id / f"thumbnail-{page_number}.jpg"
+    if not output.exists():
+        output.parent.mkdir(parents=True, exist_ok=True)
+        source = document_storage.cache_source(vars(record), record.source_path)
+        temporary = output.with_name(f"{output.stem}-{uuid.uuid4().hex}.tmp")
+        try:
+            if record.source_type == "pdf":
+                with closing(pdfium.PdfDocument(str(source))) as pdf:
+                    with closing(pdf[page_number - 1]) as page:
+                        with closing(
+                            page.render(scale=pdf_render_scale(page, 36, 160_000))
+                        ) as bitmap:
+                            with bitmap.to_pil().convert("RGB") as image:
+                                image.thumbnail((320, 320), Image.Resampling.LANCZOS)
+                                image.save(temporary, "JPEG", quality=80)
+            else:
+                with Image.open(source) as original:
+                    with original.convert("RGB") as image:
+                        image.thumbnail((320, 320), Image.Resampling.LANCZOS)
+                        image.save(temporary, "JPEG", quality=80)
+            temporary.replace(output)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return FileResponse(output, media_type="image/jpeg")
 
 
 @app.get("/api/v1/documents/{drawing_id}/pages/{page_number}")

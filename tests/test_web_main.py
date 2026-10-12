@@ -8,10 +8,12 @@ import io
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import Mock, patch
 
 import pypdfium2 as pdfium
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from PIL import Image
 
@@ -43,6 +45,22 @@ class MemoryDocumentStorage:
             page for page, data in pages if data["symbols"] or data["texts"]
         )
         result["last_labeled_at"] = max((data["saved_at"] for _, data in pages), default=None)
+        result["page_workflows"] = web.document_storage.page_workflows(
+            metadata,
+            {
+                str(page): dict(
+                    annotation_revision=data["revision"],
+                    annotation_count=len(data["symbols"]) + len(data["texts"]),
+                )
+                for page, data in pages
+            },
+        )
+        result["completed_page_count"] = sum(
+            item["status"] == "completed" for item in result["page_workflows"].values()
+        )
+        result["updated_at"] = max(
+            metadata.get("updated_at", metadata["created_at"]), result["last_labeled_at"] or ""
+        )
         return result
 
     def list_documents(self, labeled=None):
@@ -86,7 +104,48 @@ class MemoryDocumentStorage:
         return copy.deepcopy(self.annotations.get((drawing_id, page)))
 
     def save_annotation(self, drawing_id, page, data, expected_revision):
+        existing = self.annotations.get((drawing_id, page))
+        if (existing["revision"] if existing else 0) != expected_revision:
+            raise HTTPException(409, "Annotation conflict")
         self.annotations[drawing_id, page] = copy.deepcopy(data)
+        metadata = self.documents[drawing_id]
+        workflows = metadata.setdefault("page_workflows", {})
+        previous = workflows.get(str(page), {})
+        previous_content = existing or dict(symbols=[], texts=[], relations=[])
+        if (
+            any(
+                previous_content.get(key) != data.get(key)
+                for key in ("symbols", "texts", "relations")
+            )
+            or previous.get("status", "not_started") == "not_started"
+        ):
+            workflows[str(page)] = dict(
+                status="in_progress",
+                revision=previous.get("revision", 0) + 1,
+                updated_at=data["saved_at"],
+            )
+        metadata["updated_at"] = data["saved_at"]
+
+    def update_document(self, drawing_id, changes):
+        self.documents[drawing_id].update(
+            copy.deepcopy(changes), updated_at=datetime.now(timezone.utc).isoformat()
+        )
+
+    def save_page_status(self, drawing_id, page, status, expected_revision, annotation_revision):
+        metadata = self.documents[drawing_id]
+        if not 1 <= page <= metadata["page_count"]:
+            raise HTTPException(404, "Invalid page")
+        workflow = self.get_document(drawing_id)["page_workflows"].get(str(page), {})
+        if (
+            workflow.get("revision", 0) != expected_revision
+            or workflow.get("annotation_revision", 0) != annotation_revision
+        ):
+            raise HTTPException(409, "Workflow conflict")
+        now = datetime.now(timezone.utc).isoformat()
+        metadata.setdefault("page_workflows", {})[str(page)] = dict(
+            status=status, revision=expected_revision + 1, updated_at=now
+        )
+        metadata["updated_at"] = now
 
     def sync_classes(self, catalog):
         known = {item["code"] for item in self.classes}
@@ -130,6 +189,8 @@ class TestDrawingReview(unittest.TestCase):
             "read_annotation",
             "save_annotation",
             "sync_classes",
+            "update_document",
+            "save_page_status",
         ):
             patcher = patch.object(web.document_storage, name, getattr(self.storage, name))
             patcher.start()

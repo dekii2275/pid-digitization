@@ -8,6 +8,7 @@ import mimetypes
 import os
 import re
 import uuid
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException
@@ -29,8 +30,12 @@ def client() -> Minio:
     )
 
 
+PAGE_STATUSES = {"not_started", "in_progress", "pending_review", "completed"}
+
+
 DOCUMENT_QUERY = """SELECT d.*, COALESCE(a.annotation_count, 0) AS annotation_count,
-    COALESCE(a.labeled_pages, '[]'::jsonb) AS labeled_pages, a.last_labeled_at
+    COALESCE(a.labeled_pages, '[]'::jsonb) AS labeled_pages, a.last_labeled_at,
+    COALESCE(a.page_annotations, '{}'::jsonb) AS page_annotations
     FROM drawing_documents d
     LEFT JOIN LATERAL (
         SELECT SUM(jsonb_array_length(data->'symbols') + jsonb_array_length(data->'texts'))
@@ -38,14 +43,22 @@ DOCUMENT_QUERY = """SELECT d.*, COALESCE(a.annotation_count, 0) AS annotation_co
             jsonb_agg(page_number ORDER BY page_number) FILTER (
                 WHERE jsonb_array_length(data->'symbols') + jsonb_array_length(data->'texts') > 0
             ) AS labeled_pages,
-            MAX(saved_at) AS last_labeled_at
+            MAX(saved_at) AS last_labeled_at,
+            jsonb_object_agg(page_number, jsonb_build_object(
+                'annotation_revision', data->'revision',
+                'annotation_count', jsonb_array_length(data->'symbols') + jsonb_array_length(data->'texts'),
+                'saved_at', saved_at
+            )) AS page_annotations
         FROM drawing_annotations WHERE drawing_id = d.id
     ) a ON TRUE"""
 
 
 def unpack(row: dict) -> dict:
+    metadata = row["metadata"]
+    workflows = page_workflows(metadata, row["page_annotations"])
+    last_labeled = row["last_labeled_at"].isoformat() if row["last_labeled_at"] else None
     return {
-        **row["metadata"],
+        **metadata,
         "drawing_id": row["id"],
         "bucket": row["bucket"],
         "object_key": row["object_key"],
@@ -53,8 +66,82 @@ def unpack(row: dict) -> dict:
         "sha256": row["sha256"],
         "annotation_count": int(row["annotation_count"]),
         "labeled_pages": row["labeled_pages"],
-        "last_labeled_at": row["last_labeled_at"].isoformat() if row["last_labeled_at"] else None,
+        "last_labeled_at": last_labeled,
+        "page_workflows": workflows,
+        "completed_page_count": sum(item["status"] == "completed" for item in workflows.values()),
+        "updated_at": max(metadata.get("updated_at", metadata["created_at"]), last_labeled or ""),
     }
+
+
+def page_workflows(metadata: dict, annotations: dict) -> dict:
+    """Old saved pages become in-progress, never implicitly completed."""
+    result = {}
+    stored = metadata.get("page_workflows", {})
+    for page in annotations.keys() | stored.keys():
+        annotation = annotations.get(page, {})
+        result[page] = {
+            "status": "in_progress" if annotation else "not_started",
+            "revision": 0,
+            **stored.get(page, {}),
+            "annotation_revision": annotation.get("annotation_revision", 0),
+            "annotation_count": annotation.get("annotation_count", 0),
+        }
+    return result
+
+
+def update_document(drawing_id: str, changes: dict) -> None:
+    with connection() as db:
+        row = db.execute(
+            "SELECT metadata FROM drawing_documents WHERE id = %s FOR UPDATE", (drawing_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Không tìm thấy bản vẽ.")
+        metadata = {
+            **row["metadata"],
+            **changes,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        db.execute(
+            "UPDATE drawing_documents SET metadata = %s WHERE id = %s",
+            (Jsonb(metadata), drawing_id),
+        )
+
+
+def save_page_status(
+    drawing_id: str, page: int, status: str, expected_revision: int, annotation_revision: int
+) -> None:
+    if status not in PAGE_STATUSES:
+        raise HTTPException(422, "Trạng thái trang không hợp lệ.")
+    with connection() as db:
+        row = db.execute(
+            "SELECT metadata FROM drawing_documents WHERE id = %s FOR UPDATE", (drawing_id,)
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Không tìm thấy bản vẽ.")
+        metadata = row["metadata"]
+        if not 1 <= page <= metadata["page_count"]:
+            raise HTTPException(404, "Trang không thuộc bản vẽ.")
+        annotation = db.execute(
+            "SELECT data FROM drawing_annotations WHERE drawing_id = %s AND page_number = %s",
+            (drawing_id, page),
+        ).fetchone()
+        workflow = metadata.setdefault("page_workflows", {}).get(str(page), {})
+        if (
+            workflow.get("revision", 0) != expected_revision
+            or (annotation["data"]["revision"] if annotation else 0) != annotation_revision
+        ):
+            raise HTTPException(
+                409, "Trang đã thay đổi ở phiên khác. Làm mới dữ liệu trước khi đổi trạng thái."
+            )
+        now = datetime.now(timezone.utc).isoformat()
+        metadata["page_workflows"][str(page)] = dict(
+            status=status, revision=expected_revision + 1, updated_at=now
+        )
+        metadata["updated_at"] = now
+        db.execute(
+            "UPDATE drawing_documents SET metadata = %s WHERE id = %s",
+            (Jsonb(metadata), drawing_id),
+        )
 
 
 def get_document(drawing_id: str) -> dict | None:
@@ -156,9 +243,10 @@ def read_annotation(drawing_id: str, page: int) -> dict | None:
 
 def save_annotation(drawing_id: str, page: int, data: dict, expected_revision: int) -> None:
     with connection() as db:
-        if not db.execute(
-            "SELECT id FROM drawing_documents WHERE id = %s FOR UPDATE", (drawing_id,)
-        ).fetchone():
+        document = db.execute(
+            "SELECT metadata FROM drawing_documents WHERE id = %s FOR UPDATE", (drawing_id,)
+        ).fetchone()
+        if not document:
             raise HTTPException(404, "Không tìm thấy bản vẽ.")
         existing = db.execute(
             "SELECT data FROM drawing_annotations WHERE drawing_id = %s AND page_number = %s",
@@ -173,6 +261,26 @@ def save_annotation(drawing_id: str, page: int, data: dict, expected_revision: i
             VALUES (%s, %s, %s, %s) ON CONFLICT (drawing_id, page_number)
             DO UPDATE SET data = EXCLUDED.data, saved_at = EXCLUDED.saved_at""",
             (drawing_id, page, Jsonb(data), data["saved_at"]),
+        )
+        metadata = document["metadata"]
+        previous_content = (
+            existing["data"] if existing else dict(symbols=[], texts=[], relations=[])
+        )
+        changed = any(
+            previous_content.get(key) != data.get(key) for key in ("symbols", "texts", "relations")
+        )
+        workflows = metadata.setdefault("page_workflows", {})
+        previous = workflows.get(str(page), {})
+        if changed or previous.get("status", "not_started") == "not_started":
+            workflows[str(page)] = dict(
+                status="in_progress",
+                revision=previous.get("revision", 0) + 1,
+                updated_at=data["saved_at"],
+            )
+        metadata["updated_at"] = data["saved_at"]
+        db.execute(
+            "UPDATE drawing_documents SET metadata = %s WHERE id = %s",
+            (Jsonb(metadata), drawing_id),
         )
 
 

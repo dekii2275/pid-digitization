@@ -22,6 +22,7 @@ import {
   ZoomOut,
 } from 'lucide-react';
 import TiledDrawingCanvas from './TiledDrawingCanvas';
+import { AnnotationPageStatus } from './DrawingPageNavigator';
 import SymbolPreview from './SymbolPreview';
 import ExistingDrawingPicker from './ExistingDrawingPicker';
 import { getSymbolLibrary } from '../services/symbolLibrary';
@@ -678,6 +679,13 @@ function AnnotationPage({
             </button>
           </div>
         </div>
+        <AnnotationPageStatus
+          drawing={drawing}
+          revision={data?.revision}
+          dirty={dirty}
+          busy={busy}
+          hidden={hidden}
+        />
         {error && (
           <div className="annotation-notice is-error" role="alert">
             {error}
