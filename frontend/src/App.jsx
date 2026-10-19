@@ -17,17 +17,17 @@ import {
 } from 'lucide-react';
 import './App.css';
 import TiledDrawingCanvas from './components/TiledDrawingCanvas';
-import ReviewWorkspace from './components/ReviewWorkspace';
+import DrawingEditorWorkspace from './components/DrawingEditorWorkspace';
 import { downloadSceneFile } from './components/EditablePidWorkspace';
 import SymbolLabelManager from './components/SymbolLabelManager';
 import SymbolLabelTabs from './components/SymbolLabelTabs';
 import GenerateDataWorkspace from './components/GenerateDataWorkspace';
 import DataWorkspace from './components/DataWorkspace';
+import AssetWorkspace from './components/AssetWorkspace';
 import {
   getPipelineJob,
   getPipelineResults,
   runAllPipeline,
-  saveFinalReviewResults,
   uploadDrawingDocument,
 } from './services/documents';
 
@@ -196,8 +196,7 @@ export default function App() {
   const [progress, setProgress] = useState(0);
   const [pipelineStage, setPipelineStage] = useState('');
   const [aiResults, setAiResults] = useState(null);
-  const [completedJobId, setCompletedJobId] = useState(null);
-  const [sceneRevision, setSceneRevision] = useState(0);
+  const [editorTarget, setEditorTarget] = useState(null);
   const [search, setSearch] = useState('');
   const [showDetections, setShowDetections] = useState(false);
   const [showTags, setShowTags] = useState(false);
@@ -239,7 +238,6 @@ export default function App() {
       revision: '—',
     });
     setAiResults(null);
-    setCompletedJobId(null);
     setShowDetections(false);
     setShowTags(false);
     setShowConnections(false);
@@ -258,7 +256,6 @@ export default function App() {
       setFileName(uploaded.name);
       setActiveDrawing({ id: uploaded.id, name: uploaded.name, revision: '—' });
       setAiResults(null);
-      setCompletedJobId(null);
       setShowDetections(false);
       setShowTags(false);
       setShowConnections(false);
@@ -287,12 +284,11 @@ export default function App() {
     setProgress(0);
     setPipelineStage('QUEUED');
     setAiResults(null);
-    setCompletedJobId(null);
     setShowDetections(false);
     setShowTags(false);
     setShowConnections(false);
     try {
-      const created = await runAllPipeline(uploadedDrawing.id);
+      const created = await runAllPipeline(uploadedDrawing.id, uploadedDrawing.page_number || 1);
       let job = created;
       while (job.status === 'QUEUED' || job.status === 'RUNNING') {
         setProgress(job.progress);
@@ -306,14 +302,13 @@ export default function App() {
         throw new Error(job.error_message || 'Pipeline xử lý thất bại.');
       const results = await getPipelineResults(created.job_id);
       setAiResults(results);
-      setCompletedJobId(created.job_id);
-      setSceneRevision(0);
+      setEditorTarget({ ...uploadedDrawing, origin: 'processed' });
       // Result layers remain off until the reviewer explicitly selects Detect,
       // OCR, or Connect in the AI review ribbon.
       setShowDetections(false);
       setShowTags(false);
       setShowConnections(false);
-      setRibbonTab('Generate data');
+      setRibbonTab('Review');
       notify(
         `Pipeline hoàn tất: ${results.symbols?.length || 0} symbols, ${results.texts?.length || 0} OCR tags, ${results.lines?.length || 0} lines.`,
       );
@@ -436,10 +431,10 @@ export default function App() {
         </div>
       </header>
       <section
-        className={`ribbon ${['Nhãn symbol', 'Generate data', 'Data'].includes(ribbonTab) ? 'ribbon--symbols' : ''}`}
+        className={`ribbon ${['Nhãn symbol', 'Generate data', 'Data', 'Thiết bị', 'Review'].includes(ribbonTab) ? 'ribbon--symbols' : ''}`}
       >
         <div className="ribbon-tabs">
-          {['Home', 'Review', 'Generate data', 'Data', 'Nhãn symbol'].map((tab) => (
+          {['Home', 'Review', 'Generate data', 'Data', 'Thiết bị', 'Nhãn symbol'].map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -454,7 +449,7 @@ export default function App() {
         </div>
         {ribbonTab === 'Nhãn symbol' ? (
           <SymbolLabelTabs activeTab={symbolLabelTab} onChange={setSymbolLabelTab} />
-        ) : ribbonTab === 'Generate data' || ribbonTab === 'Data' ? null : (
+        ) : ['Generate data', 'Data', 'Thiết bị', 'Review'].includes(ribbonTab) ? null : (
           <div className="ribbon-tools">
             <div className="tool-group">
               <RibbonButton
@@ -515,13 +510,7 @@ export default function App() {
               <RibbonButton
                 icon={Search}
                 label="Find tag"
-                onClick={() =>
-                  notify(
-                    aiResults
-                      ? 'OCR tags đã sẵn sàng trong kết quả pipeline.'
-                      : 'Chưa có tag/OCR để tìm.',
-                  )
-                }
+                onClick={() => setRibbonTab('Thiết bị')}
               />
               <RibbonButton
                 icon={CheckCircle2}
@@ -560,24 +549,16 @@ export default function App() {
           acceptAnnotationDrawing(drawing);
           setRibbonTab('Generate data');
         }}
+        onEdit={(drawing) => {
+          setEditorTarget({ ...drawing });
+          setRibbonTab('Review');
+        }}
       />
-      {ribbonTab === 'Data' || ribbonTab === 'Generate data' ? null : ribbonTab ===
+      <AssetWorkspace hidden={ribbonTab !== 'Thiết bị'} />
+      <DrawingEditorWorkspace target={editorTarget} hidden={ribbonTab !== 'Review'} />
+      {['Data', 'Generate data', 'Thiết bị', 'Review'].includes(ribbonTab) ? null : ribbonTab ===
         'Nhãn symbol' ? (
         <SymbolLabelManager activeTab={symbolLabelTab} />
-      ) : ribbonTab === 'Review' ? (
-        <ReviewWorkspace
-          key={`${completedJobId || 'empty-review'}-${sceneRevision}`}
-          drawing={uploadedDrawing}
-          results={aiResults}
-          jobId={completedJobId}
-          onZoomChange={setZoom}
-          onSave={async (scene) => {
-            const saved = await saveFinalReviewResults(completedJobId, scene);
-            setAiResults(saved.result);
-            setSceneRevision((value) => value + 1);
-            return saved;
-          }}
-        />
       ) : (
         <main className="workspace-grid">
           <aside className="project-manager pane">

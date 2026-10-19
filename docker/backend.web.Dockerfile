@@ -19,6 +19,9 @@ RUN pip install --no-cache-dir -c /tmp/constraints.web.txt -r /tmp/requirements.
 COPY src/requirements.storage.txt /tmp/
 RUN pip install --no-cache-dir -c /tmp/constraints.web.txt -r /tmp/requirements.storage.txt && pip check
 
+COPY src/requirements.cad.txt /tmp/
+RUN pip install --no-cache-dir -c /tmp/constraints.web.txt -r /tmp/requirements.cad.txt && pip check
+
 COPY src ./src
 COPY training ./training
 COPY tests ./tests

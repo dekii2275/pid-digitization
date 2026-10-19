@@ -144,3 +144,28 @@ class TestDataManagement(unittest.TestCase):
         self.assertEqual(loaded["page_workflows"]["1"]["status"], "in_progress")
         self.assertEqual(loaded["page_workflows"]["1"]["revision"], 0)
         self.assertEqual(loaded["completed_page_count"], 0)
+
+    def test_drawing_revision_metadata_survives_older_organization_clients(self):
+        changes = dict(
+            project="Plant A",
+            drawing_set="PID",
+            tags=[],
+            drawing_number="PID-100",
+            revision_label="03",
+            lifecycle="superseded",
+        )
+        response = self.client.patch(self.document_url, json=changes)
+        self.assertEqual(response.status_code, 200, response.text)
+        for key, value in changes.items():
+            self.assertEqual(response.json()[key], value)
+        response = self.client.patch(
+            self.document_url, json=dict(project="Plant A", drawing_set="PID", tags=["updated"])
+        )
+        self.assertEqual(response.json()["revision_label"], "03")
+        self.assertEqual(response.json()["lifecycle"], "superseded")
+        self.assertEqual(
+            self.client.patch(
+                self.document_url, json={**changes, "lifecycle": "invalid"}
+            ).status_code,
+            422,
+        )

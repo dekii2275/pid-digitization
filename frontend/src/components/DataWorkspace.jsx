@@ -35,6 +35,9 @@ function DrawingOrganizationForm({ document, documents, onUpdated, disabled }) {
     project: document.project || '',
     drawing_set: document.drawing_set || '',
     tags: (document.tags || []).join(', '),
+    drawing_number: document.drawing_number || '',
+    revision_label: document.revision_label || '',
+    lifecycle: document.lifecycle || 'current',
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -116,6 +119,35 @@ function DrawingOrganizationForm({ document, documents, onUpdated, disabled }) {
             placeholder="VD: piping, scan, ưu tiên"
           />
         </label>
+        <label>
+          Số bản vẽ
+          <input
+            maxLength={120}
+            value={draft.drawing_number}
+            disabled={busy || disabled}
+            onChange={(event) => setDraft({ ...draft, drawing_number: event.target.value })}
+          />
+        </label>
+        <label>
+          Revision
+          <input
+            maxLength={60}
+            value={draft.revision_label}
+            disabled={busy || disabled}
+            onChange={(event) => setDraft({ ...draft, revision_label: event.target.value })}
+          />
+        </label>
+        <label>
+          Trạng thái sử dụng
+          <select
+            value={draft.lifecycle}
+            disabled={busy || disabled}
+            onChange={(event) => setDraft({ ...draft, lifecycle: event.target.value })}
+          >
+            <option value="current">Đang sử dụng</option>
+            <option value="superseded">Đã thay thế</option>
+          </select>
+        </label>
         <button disabled={busy || disabled}>{busy ? 'Đang lưu…' : 'Lưu nhóm và tag'}</button>
       </form>
       {error && (
@@ -133,6 +165,7 @@ export default function DataWorkspace({
   onDrawingChange,
   isUploading,
   onAnnotate,
+  onEdit,
   hidden,
 }) {
   const [documents, setDocuments] = useState([]);
@@ -630,6 +663,12 @@ export default function DataWorkspace({
                 >
                   <Tags size={14} />
                   Gán nhãn
+                </button>
+                <button
+                  disabled={pageLoading || isUploading || deleting}
+                  onClick={() => onEdit?.(drawing)}
+                >
+                  Chỉnh sửa / DXF
                 </button>
                 <a href={drawing.original_url} download>
                   <Download size={14} />

@@ -16,6 +16,8 @@ service and a local YOLOv8 symbol-detector workflow. The default application is
 - [Plan for a self-hosted/open-source rebuild](docs/open-source-rebuild-plan.md)
 - [Docker deployment guide](DEPLOYMENT.md)
 - [Symbol catalog storage and web import](docs/symbol_library.md)
+- [Tra cứu tag và hồ sơ thiết bị](docs/assets.md)
+- [Mở lại, chỉnh sửa và xuất DXF](docs/drawing-editor.md)
 - [Code style and source validation](docs/code-style.md)
 
 ## Quick start

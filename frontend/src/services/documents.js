@@ -79,8 +79,8 @@ export function savePageStatus(id, page, workflow, status) {
 export const pageThumbnailUrl = (id, page) =>
   `${apiBaseUrl}/documents/${encodeURIComponent(id)}/pages/${page}/thumbnail.jpg`;
 
-export function runAllPipeline(drawingId) {
-  return getJson(`/documents/${drawingId}/run-all`, { method: 'POST' });
+export function runAllPipeline(drawingId, page = 1) {
+  return getJson(`/documents/${drawingId}/run-all?page_number=${page}`, { method: 'POST' });
 }
 
 export function getPipelineJob(jobId) {
@@ -101,4 +101,34 @@ export function saveFinalReviewResults(jobId, scene) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(scene),
   });
+}
+
+export function getPageReviewScene(id, page, origin = 'latest') {
+  return getJson(
+    `/documents/${encodeURIComponent(id)}/pages/${page}/review-scene?origin=${origin}`,
+  );
+}
+
+export function savePageReviewScene(id, page, data) {
+  return getJson(`/documents/${encodeURIComponent(id)}/pages/${page}/review-scene`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export async function downloadPageDxf(id, page, version, name) {
+  const response = await fetch(
+    `${apiBaseUrl}/documents/${encodeURIComponent(id)}/pages/${page}/review-scene/export.dxf?version=${version}`,
+  );
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(typeof data.detail === 'string' ? data.detail : 'Không thể xuất DXF.');
+  }
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `${(name || 'pid').replace(/\.[^.]+$/, '')}-p${page}-v${version}.dxf`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }

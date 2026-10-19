@@ -1,0 +1,127 @@
+.drawing-editor-workspace {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  background: #f3f6f8;
+}
+.drawing-editor-workspace[hidden] {
+  display: none;
+}
+.drawing-editor-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #ccd7df;
+  font-size: 12px;
+}
+.drawing-editor-toolbar strong {
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.drawing-editor-toolbar button,
+.drawing-editor-toolbar select {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid #cad6df;
+  border-radius: 5px;
+  background: #fff;
+  color: #294257;
+}
+.drawing-editor-toolbar button {
+  cursor: pointer;
+}
+.drawing-editor-toolbar button:disabled {
+  opacity: 0.5;
+}
+.drawing-editor-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.drawing-editor-body > .review-workspace {
+  flex: 1;
+  min-height: 0;
+}
+.drawing-editor-body.is-loading {
+  pointer-events: none;
+  opacity: 0.6;
+}
+.drawing-editor-notice {
+  margin: 0;
+  padding: 9px 16px;
+  background: #e5f3ec;
+  color: #16664c;
+  font-size: 12px;
+}
+.drawing-editor-notice.is-error {
+  background: #fff0ee;
+  color: #a62c21;
+}
+.review-history-tools,
+.review-export-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 9px 12px;
+  border-bottom: 1px solid #dce4eb;
+}
+.review-history-tools button,
+.review-export-tools button,
+.review-manual-tools__buttons button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid #cbd6de;
+  background: white;
+  border-radius: 4px;
+  color: #294257;
+  font-size: 12px;
+  cursor: pointer;
+}
+.review-history-tools button:disabled,
+.review-export-tools button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.review-cad-settings {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 7px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dce4eb;
+}
+.review-cad-settings label {
+  font-size: 11px;
+  color: #506375;
+}
+.review-cad-settings select,
+.review-cad-settings input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #cbd6de;
+  border-radius: 4px;
+  background: #fff;
+  margin-top: 4px;
+}
+.review-cad-settings p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #687b8c;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.review-vector-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}

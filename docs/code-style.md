@@ -39,11 +39,14 @@ npm ci
 npm run format
 npm run format:check
 npm run lint
+npm test
 npm run build
 ```
 
-The format commands cover all of `src/`, including new components and services,
-plus `vite.config.js`, `index.html` and `package.json`.
+The format commands cover all of `src/` and `tests/`, including components,
+services and Node regression tests, plus `vite.config.js`, `index.html` and
+`package.json`. `npm test` uses Node's built-in test runner; it needs no test
+framework dependencies.
 
 ## API and storage regressions
 
@@ -57,6 +60,8 @@ docker compose exec -T backend python -m unittest discover -s tests -p 'test_web
 docker compose exec -T backend python -m unittest discover -s tests -p 'test_data_management.py' -v
 docker compose exec -T -e SYMBOL_TEST_DATABASE=1 backend python -m unittest discover -s tests -p 'test_symbol_library.py' -v
 docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_document_storage.py' -v
+docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_assets.py' -v
+docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_drawing_editor.py' -v
 python scripts/smoke_data.py
 python scripts/smoke_web.py --pipeline --timeout 1200
 ```

@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Literal
 
 import pypdfium2 as pdfium
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from minio.error import S3Error
@@ -27,7 +27,7 @@ from psycopg import Error as DatabaseError
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from urllib3.exceptions import HTTPError as StorageConnectionError
 
-from app import document_storage
+from app import asset_catalog, document_storage, drawing_editor
 from app.annotations import create_router as create_annotation_router
 from app.symbol_library import init_library
 from app.symbol_library import router as symbol_library_router
@@ -74,6 +74,9 @@ class DrawingRecord:
     last_labeled_at: str | None = None
     project: str = ""
     drawing_set: str = ""
+    drawing_number: str = ""
+    revision_label: str = ""
+    lifecycle: str = "current"
     tags: list[str] = field(default_factory=list)
     updated_at: str | None = None
     page_workflows: dict = field(default_factory=dict)
@@ -88,6 +91,7 @@ class DrawingRecord:
 class PipelineJob:
     job_id: str
     drawing_id: str
+    page_number: int = 1
     status: str = "QUEUED"
     stage: str = "QUEUED"
     progress: int = 0
@@ -108,6 +112,7 @@ jobs_lock = threading.Lock()
 async def lifespan(app: FastAPI):
     init_library()
     document_storage.init_documents(APP_ROOT)
+    drawing_editor.import_legacy_results(PIPELINE_ARTIFACTS_ROOT)
     yield
 
 
@@ -122,6 +127,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(symbol_library_router)
+app.include_router(asset_catalog.router)
 
 
 async def storage_unavailable(request, error):
@@ -232,6 +238,9 @@ def drawing_payload(record: DrawingRecord) -> dict:
         "last_labeled_at": record.last_labeled_at,
         "project": record.project,
         "drawing_set": record.drawing_set,
+        "drawing_number": record.drawing_number,
+        "revision_label": record.revision_label,
+        "lifecycle": record.lifecycle,
         "tags": record.tags,
         "updated_at": record.updated_at or record.created_at,
         "page_workflows": record.page_workflows,
@@ -255,8 +264,11 @@ class DocumentOrganizationRequest(BaseModel):
     project: str = Field(max_length=120)
     drawing_set: str = Field(max_length=120)
     tags: list[str] = Field(max_length=30)
+    drawing_number: str = Field(default="", max_length=120)
+    revision_label: str = Field(default="", max_length=60)
+    lifecycle: Literal["current", "superseded"] = "current"
 
-    @field_validator("project", "drawing_set")
+    @field_validator("project", "drawing_set", "drawing_number", "revision_label")
     @classmethod
     def trim_name(cls, value):
         return value.strip()
@@ -284,7 +296,7 @@ class PageStatusRequest(BaseModel):
 @app.patch("/api/v1/documents/{drawing_id}")
 def organize_document(drawing_id: str, request: DocumentOrganizationRequest) -> dict:
     record_or_404(drawing_id)
-    document_storage.update_document(drawing_id, request.model_dump())
+    document_storage.update_document(drawing_id, request.model_dump(exclude_unset=True))
     return drawing_payload(record_or_404(drawing_id))
 
 
@@ -343,6 +355,20 @@ def get_document_page(drawing_id: str, page_number: int) -> dict:
         "preview_url": f"{base}/preview.jpg",
         "tile_url_template": f"{base}/tiles/{{z}}/{{x}}/{{y}}.png",
     }
+
+
+def editor_page_context(drawing_id: str, page_number: int) -> dict:
+    page = get_document_page(drawing_id, page_number)
+    return {
+        "drawing_id": drawing_id,
+        "page_number": page_number,
+        "width": page["width"],
+        "height": page["height"],
+        "name": page["name"],
+    }
+
+
+app.include_router(drawing_editor.create_router(editor_page_context))
 
 
 def save_preview(source: Path, destination: Path) -> None:
@@ -490,6 +516,7 @@ def job_payload(job: PipelineJob) -> dict:
     return {
         "job_id": job.job_id,
         "drawing_id": job.drawing_id,
+        "page_number": job.page_number,
         "status": job.status,
         "stage": job.stage,
         "progress": job.progress,
@@ -541,7 +568,7 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
     try:
         if not PIPELINE_WEIGHTS.is_file():
             raise FileNotFoundError(f"Không tìm thấy trọng số detector: {PIPELINE_WEIGHTS}")
-        source = page_image(drawing, 1)
+        source = page_image(drawing, job.page_number)
         script = REPO_ROOT / "training/yolov8s/run_pid_pipeline.py"
         if not script.is_file():
             raise FileNotFoundError("Không tìm thấy script pipeline trong container.")
@@ -585,6 +612,15 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
         result_path = output_dir / "editor" / "scene.json"
         if not result_path.is_file():
             raise FileNotFoundError("Pipeline không tạo được editor/scene.json.")
+        (output_dir / "page-context.json").write_text(
+            json.dumps({"page_number": job.page_number}), encoding="utf-8"
+        )
+        drawing_editor.save_processed_scene(
+            drawing.drawing_id,
+            job.page_number,
+            job.job_id,
+            json.loads(result_path.read_text(encoding="utf-8")),
+        )
         job.result_path = result_path
         update_job(job, status="COMPLETED", stage="COMPLETED", progress=100)
     except Exception as error:  # Surface a safe, actionable error to the review workspace.
@@ -595,10 +631,14 @@ def run_pipeline_job(job: PipelineJob, drawing: DrawingRecord) -> None:
 
 
 @app.post("/api/v1/documents/{drawing_id}/run-all", status_code=202)
-def run_all(drawing_id: str) -> dict:
+def run_all(drawing_id: str, page_number: int = Query(default=1, ge=1)) -> dict:
     with jobs_lock:
         drawing = record_or_404(drawing_id)
-        job = PipelineJob(job_id=f"job_{uuid.uuid4().hex[:12]}", drawing_id=drawing_id)
+        if page_number > drawing.page_count:
+            raise HTTPException(404, "Trang không thuộc bản vẽ.")
+        job = PipelineJob(
+            job_id=f"job_{uuid.uuid4().hex[:12]}", drawing_id=drawing_id, page_number=page_number
+        )
         jobs[job.job_id] = job
     threading.Thread(target=run_pipeline_job, args=(job, drawing), daemon=True).start()
     return job_payload(job)
@@ -657,6 +697,7 @@ def save_final_results(job_id: str, scene: dict = Body(...)) -> dict:
         "status": "FINAL",
         "saved_at": saved_at,
     }
+    asset_catalog.save_review_scene(job.drawing_id, job_id, saved_scene, job.page_number)
     destination = job.result_path.with_name("final-scene.json")
     temporary = destination.with_suffix(".json.tmp")
     temporary.write_text(json.dumps(saved_scene, ensure_ascii=False, indent=2), encoding="utf-8")

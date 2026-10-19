@@ -1,4 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
+import VectorDrawingLayer from './VectorDrawingLayer';
 
 const clamp = (value, minimum, maximum) => Math.min(Math.max(value, minimum), maximum);
 
@@ -44,6 +45,8 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
     panOnly = false,
     centerOnResize = false,
     viewerHint,
+    focusBox = null,
+    vectorMode = false,
     onEditStart,
     onEditEnd,
   },
@@ -113,6 +116,27 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
   useEffect(() => {
     onZoomChange?.(Math.round(view.scale * 100));
   }, [onZoomChange, view.scale]);
+  useEffect(() => {
+    if (!focusBox || !viewport.width || !viewport.height) return;
+    const { x, y, width, height } = focusBox;
+    if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return;
+    const scale = clamp(
+      Math.min(viewport.width / (width + 160), viewport.height / (height + 160)),
+      0.03,
+      3,
+    );
+    // Synchronize the camera before painting the measured viewport, cancelling
+    // any pending focus when a newer selection or resize arrives.
+    const frame = window.requestAnimationFrame(() => {
+      autoFitRef.current = false;
+      setView({
+        scale,
+        x: viewport.width / 2 - (x + width / 2) * scale,
+        y: viewport.height / 2 - (y + height / 2) * scale,
+      });
+    });
+    return () => window.cancelAnimationFrame(frame);
+  }, [focusBox, drawing.id, drawing.page_number, viewport.width, viewport.height]);
 
   const zoomAt = (nextScale, clientX, clientY) => {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -290,7 +314,20 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
       });
     } else if (edit.kind === 'line') {
       const start = edit.item;
-      if (Array.isArray(start.start) && Array.isArray(start.end)) {
+      if (Array.isArray(start.points)) {
+        const xs = start.points.map((point) => Number(point[0]));
+        const ys = start.points.map((point) => Number(point[1]));
+        const moveX = clamp(dx, -Math.min(...xs), drawing.width - Math.max(...xs));
+        const moveY = clamp(dy, -Math.min(...ys), drawing.height - Math.max(...ys));
+        const points = start.points.map(([x, y]) => [Number(x) + moveX, Number(y) + moveY]);
+        onUpdateItem?.('line', start.id, {
+          points,
+          x1: points[0][0],
+          y1: points[0][1],
+          x2: points.at(-1)[0],
+          y2: points.at(-1)[1],
+        });
+      } else if (Array.isArray(start.start) && Array.isArray(start.end)) {
         onUpdateItem?.('line', start.id, {
           start: [start.start[0] + dx, start.start[1] + dy],
           end: [start.end[0] + dx, start.end[1] + dy],
@@ -358,7 +395,16 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
           const box = point ? rectFromPoints(create.start, point) : null;
           createRef.current = null;
           setDraftBox(null);
-          if (box && box.width >= 6 && box.height >= 6) onCreateItem?.(drawMode, box);
+          if (
+            point &&
+            drawMode === 'line' &&
+            Math.hypot(point.x - create.start.x, point.y - create.start.y) >= 4
+          ) {
+            onCreateItem?.('line', {
+              start: [create.start.x, create.start.y],
+              end: [point.x, point.y],
+            });
+          } else if (box && box.width >= 6 && box.height >= 6) onCreateItem?.(drawMode, box);
           return;
         }
         dragRef.current = null;
@@ -384,21 +430,49 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
           transform: `translate(${view.x}px, ${view.y}px) scale(${screenScale})`,
         }}
       >
-        {tiles.map(({ x, y }) => (
-          <img
-            key={`${tileLevel}-${x}-${y}`}
-            className="drawing-tile"
-            draggable="false"
-            src={tileUrl(x, y)}
-            alt=""
-            style={{
-              left: x * drawing.tile_size,
-              top: y * drawing.tile_size,
-              width: Math.min(drawing.tile_size, levelWidth - x * drawing.tile_size),
-              height: Math.min(drawing.tile_size, levelHeight - y * drawing.tile_size),
-            }}
+        {!vectorMode &&
+          tiles.map(({ x, y }) => (
+            <img
+              key={`${tileLevel}-${x}-${y}`}
+              className="drawing-tile"
+              draggable="false"
+              src={tileUrl(x, y)}
+              alt=""
+              style={{
+                left: x * drawing.tile_size,
+                top: y * drawing.tile_size,
+                width: Math.min(drawing.tile_size, levelWidth - x * drawing.tile_size),
+                height: Math.min(drawing.tile_size, levelHeight - y * drawing.tile_size),
+              }}
+            />
+          ))}
+        {vectorMode && (
+          <VectorDrawingLayer
+            drawing={drawing}
+            results={results}
+            width={levelWidth}
+            height={levelHeight}
           />
-        ))}
+        )}
+        {focusBox && (
+          <svg
+            className="asset-focus-overlay"
+            width={levelWidth}
+            height={levelHeight}
+            style={{ position: 'absolute', inset: 0, pointerEvents: 'none' }}
+            aria-label="Vị trí tag được chọn"
+          >
+            <rect
+              x={focusBox.x * sourceScale}
+              y={focusBox.y * sourceScale}
+              width={focusBox.width * sourceScale}
+              height={focusBox.height * sourceScale}
+              fill="rgba(245, 158, 11, 0.22)"
+              stroke="#d97706"
+              strokeWidth={3 / screenScale}
+            />
+          </svg>
+        )}
         {showConnections && (
           <svg
             className="connection-overlay"
@@ -416,6 +490,11 @@ const TiledDrawingCanvas = forwardRef(function TiledDrawingCanvas(
                       key={line.id || index}
                       d={path}
                       strokeWidth={overlayStroke}
+                      strokeDasharray={
+                        line.line_type === 'signal'
+                          ? `${8 * sourceScale} ${4 * sourceScale}`
+                          : undefined
+                      }
                       pointerEvents={reviewMode ? 'stroke' : 'none'}
                       className={selected('line', line.id) ? 'is-selected' : ''}
                       onPointerDown={(event) => startEdit(event, 'line', line)}

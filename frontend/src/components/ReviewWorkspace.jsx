@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
-import { CheckCircle2, Plus, Save, Scan, Trash2, Type } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { CheckCircle2, Download, Plus, Save, Scan, Trash2, Type, Undo2, Redo2 } from 'lucide-react';
 import TiledDrawingCanvas from './TiledDrawingCanvas';
+import { cadKind } from '../services/cad';
 
 const collectionForKind = {
   symbol: 'symbols',
@@ -43,8 +44,24 @@ function NumberField({ label, value, onChange }) {
   );
 }
 
-export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoomChange }) {
+export default function ReviewWorkspace({
+  drawing,
+  results,
+  onSave,
+  onZoomChange,
+  onDirtyChange,
+  onExportDxf,
+  canExport = false,
+  readOnly = false,
+}) {
   const [scene, setScene] = useState(() => cloneScene(results));
+  const sceneRef = useRef(scene);
+  const baseline = useRef(JSON.stringify(scene));
+  const past = useRef([]);
+  const future = useRef([]);
+  const gesture = useRef(null);
+  const [historySize, setHistorySize] = useState({ past: 0, future: 0 });
+  const [vectorMode, setVectorMode] = useState(false);
   const [selected, setSelected] = useState(null);
   const [activeKind, setActiveKind] = useState('symbol');
   const [dirty, setDirty] = useState(false);
@@ -53,6 +70,40 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
   const [saveError, setSaveError] = useState('');
   const [editingItem, setEditingItem] = useState(null);
   const [drawMode, setDrawMode] = useState(null);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+  const commit = (updater, record = true) => {
+    if (saving || readOnly) return;
+    const current = sceneRef.current;
+    const next = typeof updater === 'function' ? updater(current) : updater;
+    if (JSON.stringify(next) === JSON.stringify(current)) return;
+    if (record && !gesture.current) {
+      past.current = [...past.current.slice(-49), current];
+      future.current = [];
+    }
+    sceneRef.current = next;
+    setScene(next);
+    setDirty(JSON.stringify(next) !== baseline.current);
+    setHistorySize({ past: past.current.length, future: future.current.length });
+  };
+  const undo = () => {
+    if (!past.current.length || saving) return;
+    const previous = past.current.pop();
+    future.current.push(sceneRef.current);
+    commit(previous, false);
+    setSelected(null);
+    setEditingItem(null);
+  };
+  const redo = () => {
+    if (!future.current.length || saving) return;
+    const next = future.current.pop();
+    past.current.push(sceneRef.current);
+    commit(next, false);
+    setSelected(null);
+    setEditingItem(null);
+  };
 
   const selectedCollection = collectionForKind[selected?.kind];
   const selectedItem = selectedCollection
@@ -74,63 +125,103 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
   const updateItem = (kind, id, patch) => {
     const collection = collectionForKind[kind];
     if (!collection) return;
-    setScene((current) => ({
+    commit((current) => ({
       ...current,
       [collection]: current[collection].map((item) =>
-        String(item.id) === String(id) ? { ...item, ...patch } : item,
+        String(item.id) === String(id)
+          ? (() => {
+              const next = { ...item, ...patch };
+              if (kind === 'line' && item.points && !patch.points) {
+                const points = item.points.map((point) => [...point]);
+                if ('x1' in patch) points[0][0] = patch.x1;
+                if ('y1' in patch) points[0][1] = patch.y1;
+                if ('x2' in patch) points[points.length - 1][0] = patch.x2;
+                if ('y2' in patch) points[points.length - 1][1] = patch.y2;
+                next.points = points;
+              }
+              return next;
+            })()
+          : item,
       ),
     }));
-    setDirty(true);
   };
 
   const removeSelected = () => {
     if (!selected || !selectedCollection) return;
-    setScene((current) => ({
+    commit((current) => ({
       ...current,
       [selectedCollection]: current[selectedCollection].filter(
         (item) => String(item.id) !== String(selected.id),
       ),
+      ...(selected.kind === 'symbol'
+        ? {
+            topology_edges: current.topology_edges.filter(
+              (edge) =>
+                String(edge.source) !== String(selected.id) &&
+                String(edge.target) !== String(selected.id),
+            ),
+          }
+        : {}),
+      ...(current.relations
+        ? {
+            relations: current.relations.filter(
+              (edge) =>
+                String(edge.source) !== String(selected.id) &&
+                String(edge.target) !== String(selected.id),
+            ),
+          }
+        : {}),
     }));
     setSelected(null);
     setEditingItem(null);
-    setDirty(true);
   };
 
   const createManualItem = (kind, box) => {
+    if (saving || readOnly) return;
     const id = `manual-${kind}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const item =
-      kind === 'text'
+      kind === 'line'
         ? {
             id,
-            text: '',
-            confidence: 1,
+            points: [box.start, box.end],
+            x1: box.start[0],
+            y1: box.start[1],
+            x2: box.end[0],
+            y2: box.end[1],
+            line_type: 'pipe',
             source: 'manual',
-            ocr_engine: 'Manual',
-            x: box.x,
-            y: box.y,
-            width: box.width,
-            height: box.height,
           }
-        : {
-            id,
-            type: 'Manual symbol',
-            tag: '',
-            confidence: 1,
-            source: 'manual',
-            x: box.x,
-            y: box.y,
-            width: box.width,
-            height: box.height,
-            rotation: 0,
-          };
+        : kind === 'text'
+          ? {
+              id,
+              text: '',
+              confidence: 1,
+              source: 'manual',
+              ocr_engine: 'Manual',
+              x: box.x,
+              y: box.y,
+              width: box.width,
+              height: box.height,
+            }
+          : {
+              id,
+              type: 'Manual symbol',
+              tag: '',
+              confidence: 1,
+              source: 'manual',
+              x: box.x,
+              y: box.y,
+              width: box.width,
+              height: box.height,
+              rotation: 0,
+            };
     const collection = collectionForKind[kind];
     const selection = { kind, id };
-    setScene((current) => ({ ...current, [collection]: [...(current[collection] || []), item] }));
+    commit((current) => ({ ...current, [collection]: [...(current[collection] || []), item] }));
     setSelected(selection);
     setActiveKind(kind);
     setEditingItem(selection);
     setDrawMode(null);
-    setDirty(true);
   };
 
   const nearbyOcr = useMemo(() => {
@@ -153,11 +244,14 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
   }, [scene.texts, selected?.kind, selectedItem]);
 
   const save = async () => {
-    if (!jobId || !onSave || saving) return;
+    if (!onSave || saving || readOnly) return;
     setSaving(true);
     setSaveError('');
     try {
       const response = await onSave(scene);
+      sceneRef.current = cloneScene(response.result || scene);
+      setScene(sceneRef.current);
+      baseline.current = JSON.stringify(sceneRef.current);
       setSavedAt(response.saved_at);
       setDirty(false);
     } catch (error) {
@@ -193,7 +287,7 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
       <aside className="review-inspector">
         <div className="review-header">
           <div>
-            <strong>AI REVIEW</strong>
+            <strong>CHỈNH SỬA P&amp;ID</strong>
             <small>
               {dirty
                 ? 'Có thay đổi chưa lưu'
@@ -202,9 +296,88 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
                   : 'Chưa có thay đổi'}
             </small>
           </div>
-          <button className="review-save" disabled={!dirty || saving || !jobId} onClick={save}>
+          <button
+            className="review-save"
+            disabled={(!dirty && canExport) || saving || readOnly}
+            onClick={save}
+          >
             <Save size={15} /> {saving ? 'Đang lưu…' : 'Lưu kết quả'}
           </button>
+        </div>
+        <div className="review-history-tools">
+          <button onClick={undo} disabled={!historySize.past || saving || readOnly}>
+            <Undo2 size={14} /> Undo
+          </button>
+          <button onClick={redo} disabled={!historySize.future || saving || readOnly}>
+            <Redo2 size={14} /> Redo
+          </button>
+          <button onClick={() => setVectorMode(!vectorMode)} aria-pressed={vectorMode}>
+            {vectorMode ? 'Xem ảnh gốc' : 'Xem vector'}
+          </button>
+        </div>
+        <div className="review-export-tools">
+          <button onClick={onExportDxf} disabled={!canExport || dirty || saving || readOnly}>
+            <Download size={14} /> Xuất DXF
+          </button>
+          <small>
+            {dirty || !canExport ? 'Lưu kết quả trước khi xuất.' : 'Xuất bản chỉnh sửa đã lưu.'}
+          </small>
+        </div>
+        <div className="review-cad-settings">
+          <label>
+            Đơn vị CAD
+            <select
+              aria-label="Đơn vị CAD"
+              value={scene.cad_settings?.units || 'unitless'}
+              disabled={saving}
+              onChange={(event) =>
+                commit((current) => ({
+                  ...current,
+                  cad_settings: {
+                    units_per_pixel: 1,
+                    ...current.cad_settings,
+                    units: event.target.value,
+                  },
+                }))
+              }
+            >
+              <option value="unitless">Không đơn vị</option>
+              <option value="mm">mm</option>
+              <option value="inch">inch</option>
+            </select>
+          </label>
+          <label>
+            Đơn vị / pixel
+            <input
+              aria-label="Đơn vị CAD trên pixel"
+              type="number"
+              min="0.000001"
+              max="1000000"
+              step="any"
+              value={scene.cad_settings?.units_per_pixel ?? 1}
+              disabled={saving}
+              onChange={(event) =>
+                commit((current) => ({
+                  ...current,
+                  cad_settings: {
+                    units: 'unitless',
+                    ...current.cad_settings,
+                    units_per_pixel: event.target.value === '' ? '' : Number(event.target.value),
+                  },
+                }))
+              }
+            />
+          </label>
+          <p>
+            Mặc định 1 pixel = 1 đơn vị CAD. Symbol vector dùng hình cơ bản theo nhóm; chọn đúng
+            hình CAD trước khi xuất.
+          </p>
+          <p role="status">
+            DXF chứa {scene.symbols.length} symbol, {scene.texts.length} mục chữ và{' '}
+            {scene.lines.length} đường đã lưu. Không tự chuyển toàn bộ nét trên ảnh thành CAD.
+            {!scene.lines.length && ' Chưa có đường ống/tín hiệu để xuất.'}
+            {!scene.texts.length && ' Chưa có chữ OCR để xuất.'}
+          </p>
         </div>
         <div className="review-tabs">
           {Object.keys(labels).map((kind) => (
@@ -276,6 +449,33 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
             >
               <Type size={14} /> OCR / text
             </button>
+            <button
+              type="button"
+              className={drawMode === 'line' ? 'active' : ''}
+              onClick={() => setDrawMode((mode) => (mode === 'line' ? null : 'line'))}
+            >
+              + Đường ống
+            </button>
+            <button
+              type="button"
+              disabled={scene.symbols.length < 2}
+              onClick={() => {
+                const edge = {
+                  id: `connection-${crypto.randomUUID()}`,
+                  source: scene.symbols[0].id,
+                  target: scene.symbols[1].id,
+                  flow_direction: 'unknown',
+                };
+                commit((current) => ({
+                  ...current,
+                  topology_edges: [...current.topology_edges, edge],
+                }));
+                setSelection({ kind: 'connection', id: edge.id });
+                setEditingItem({ kind: 'connection', id: edge.id });
+              }}
+            >
+              + Kết nối
+            </button>
           </div>
           {drawMode && (
             <p className="review-draw-hint">
@@ -307,7 +507,7 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
             >
               {isEditing ? 'Hoàn tất chỉnh sửa' : 'Bắt đầu chỉnh sửa'}
             </button>
-            <fieldset className="review-edit-fields" disabled={!isEditing}>
+            <fieldset className="review-edit-fields" disabled={!isEditing || saving || readOnly}>
               {selected.kind === 'symbol' && (
                 <>
                   <label className="review-field review-wide">
@@ -319,15 +519,30 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
                   </label>
                   <label className="review-field review-wide">
                     <span>ID</span>
-                    <input
-                      value={selectedItem.id || ''}
-                      onChange={(event) => {
-                        const id = event.target.value;
-                        updateSelected({ id });
-                        setSelected({ kind: 'symbol', id });
-                      }}
-                    />
+                    <input value={selectedItem.id || ''} readOnly />
                   </label>
+                  <label className="review-field review-wide">
+                    <span>Hình CAD</span>
+                    <select
+                      aria-label="Hình CAD"
+                      value={cadKind(selectedItem)}
+                      onChange={(event) => updateSelected({ cad_kind: event.target.value })}
+                    >
+                      <option value="other">Khung thiết bị</option>
+                      <option value="pump">Bơm / máy nén</option>
+                      <option value="valve">Van cổng / van cơ bản</option>
+                      <option value="check_valve">Van một chiều</option>
+                      <option value="globe_valve">Van cầu</option>
+                      <option value="connector">Đầu nối sang bản vẽ khác</option>
+                      <option value="instrument">Instrument</option>
+                      <option value="vessel">Bồn / bình</option>
+                    </select>
+                  </label>
+                  <NumberField
+                    label="Góc xoay"
+                    value={selectedItem.rotation || 0}
+                    onChange={(rotation) => updateSelected({ rotation })}
+                  />
                   <label className="review-field review-wide">
                     <span>Tag / nhãn</span>
                     <input
@@ -419,6 +634,17 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
               )}
               {selected.kind === 'line' && (
                 <>
+                  <label className="review-field review-wide">
+                    <span>Loại đường</span>
+                    <select
+                      aria-label="Loại đường"
+                      value={selectedItem.line_type || 'pipe'}
+                      onChange={(event) => updateSelected({ line_type: event.target.value })}
+                    >
+                      <option value="pipe">Đường ống</option>
+                      <option value="signal">Tín hiệu</option>
+                    </select>
+                  </label>
                   <div className="review-field-grid">
                     <NumberField
                       label="X1"
@@ -533,6 +759,22 @@ export default function ReviewWorkspace({ drawing, results, jobId, onSave, onZoo
           onCreateItem={createManualItem}
           drawMode={drawMode}
           onZoomChange={onZoomChange}
+          vectorMode={vectorMode}
+          panOnly={saving || readOnly}
+          onEditStart={() => {
+            gesture.current = sceneRef.current;
+          }}
+          onEditEnd={() => {
+            if (
+              gesture.current &&
+              JSON.stringify(gesture.current) !== JSON.stringify(sceneRef.current)
+            ) {
+              past.current = [...past.current.slice(-49), gesture.current];
+              future.current = [];
+              setHistorySize({ past: past.current.length, future: future.current.length });
+            }
+            gesture.current = null;
+          }}
         />
       </section>
     </main>

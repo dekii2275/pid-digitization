@@ -180,6 +180,8 @@ class TestDrawingReview(unittest.TestCase):
         self.init_library = patcher.start()
         self.addCleanup(patcher.stop)
         self.storage = MemoryDocumentStorage()
+        self.enterContext(patch.object(web.asset_catalog, "save_review_scene"))
+        self.enterContext(patch.object(web.drawing_editor, "save_processed_scene"))
         for name in (
             "get_document",
             "list_documents",

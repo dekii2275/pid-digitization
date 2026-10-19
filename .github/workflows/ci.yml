@@ -40,6 +40,7 @@ jobs:
       - run: npm ci
       - run: npm run format:check
       - run: npm run lint
+      - run: npm test
       - run: npm run build
 
   web-stack:
@@ -67,6 +68,8 @@ jobs:
           docker compose exec -T backend python -m unittest discover -s tests -p 'test_annotations.py' -v
           docker compose exec -T backend python -m unittest discover -s tests -p 'test_data_management.py' -v
           docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_document_storage.py' -v
+          docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_assets.py' -v
+          docker compose exec -T -e DOCUMENT_TEST_STORAGE=1 backend python -m unittest discover -s tests -p 'test_drawing_editor.py' -v
           docker compose exec -T -e SYMBOL_TEST_DATABASE=1 backend python -m unittest discover -s tests -p 'test_symbol_library.py' -v
           docker compose exec -T -e DATABASE_URL=postgresql+psycopg://localhost/test backend python -m unittest discover -s tests -p 'test_database_models.py' -v
           docker compose exec -T -e DATABASE_URL=postgresql+psycopg://localhost/test backend python -m unittest discover -s tests -p 'test_api_v1.py' -v

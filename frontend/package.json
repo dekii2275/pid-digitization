@@ -9,10 +9,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "test": "node --test tests/*.test.mjs",
     "lint": "oxlint --deny-warnings src vite.config.js",
     "preview": "vite preview",
-    "format": "prettier --write src vite.config.js index.html package.json",
-    "format:check": "prettier --check src vite.config.js index.html package.json"
+    "format": "prettier --write src tests vite.config.js index.html package.json",
+    "format:check": "prettier --check src tests vite.config.js index.html package.json"
   },
   "dependencies": {
     "cytoscape": "^3.34.3",

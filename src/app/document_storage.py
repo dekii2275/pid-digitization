@@ -338,6 +338,12 @@ def init_documents(legacy_root: Path) -> None:
         db.execute("""CREATE TABLE IF NOT EXISTS drawing_annotation_classes (
             id INTEGER PRIMARY KEY CHECK (id = 1), data JSONB NOT NULL
         )""")
+        from app.asset_catalog import init_tables
+
+        init_tables(db)
+        from app.drawing_editor import init_tables as init_editor_tables
+
+        init_editor_tables(db)
         class_path = legacy_root / "annotations/classes.json"
         legacy_classes = (
             json.loads(class_path.read_text(encoding="utf-8")) if class_path.is_file() else []
